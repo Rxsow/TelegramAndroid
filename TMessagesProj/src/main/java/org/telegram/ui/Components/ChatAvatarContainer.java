@@ -86,11 +86,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     private GradientDrawable iosTextCapsuleBg;
     private View iosTextCapsuleView;
     private final android.graphics.Rect iosCapsuleBounds = new android.graphics.Rect();
-    private int iosCapsuleColorCurrent;
-    // Tele iOS: text colors of the header capsule stay readable in both light and
-    // dark themes because the capsule itself switches (white / dark gray) below
-    private static final int IOS_CAPSULE_COLOR_LIGHT = 0xFFFFFFFF;
-    private static final int IOS_CAPSULE_COLOR_DARK = 0xFF2B2B2F;
     private SimpleTextView titleTextView;
     private AtomicReference<SimpleTextView> titleTextLargerCopyView = new AtomicReference<>();
     private SimpleTextView subtitleTextView;
@@ -108,6 +103,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         private final android.graphics.Paint iosSavedCirclePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         private Drawable iosSavedIconDrawable;
         private int iosSavedIconColor;
+        private int iosSavedCircleColor;
         @Override
         public void draw(Canvas canvas) {
             if (getAvatarType() != AVATAR_TYPE_SAVED) {
@@ -121,7 +117,13 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             int iosSize = iosBounds.width();
             canvas.save();
             canvas.translate(iosBounds.left, iosBounds.top);
-            iosSavedCirclePaint.setColor(0xFFFFFFFF);
+            // iOS style: circle follows the theme so it stays visible on both
+            // light and dark wallpapers
+            int iosCircleColor = Theme.getColor(Theme.key_chat_messagePanelBackground, resourcesProvider);
+            if (iosSavedCircleColor != iosCircleColor) {
+                iosSavedCircleColor = iosCircleColor;
+                iosSavedCirclePaint.setColor(iosCircleColor);
+            }
             canvas.drawCircle(iosSize / 2f, iosSize / 2f, iosSize / 2f, iosSavedCirclePaint);
             int iosIconColor = org.telegram.ui.ActionBar.Theme.getColor(org.telegram.ui.ActionBar.Theme.key_avatar_backgroundSaved);
             if (iosSavedIconDrawable == null || iosSavedIconColor != iosIconColor) {
@@ -417,13 +419,24 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
         }
 
-        // iOS style: capsule behind the title hugging the text, floating on the
-        // wallpaper (MRTelegram look). Color adapts to the current theme so the
-        // name and status remain readable in both light and dark modes.
-        iosTextCapsuleBg = new GradientDrawable();
+        // iOS style: capsule behind the title, hugging the text, floating on the
+        // wallpaper (MRTelegram look). The color follows the current theme so the
+        // title stays visible in both light and dark mode.
+        iosTextCapsuleBg = new GradientDrawable() {
+            private int lastColor = Theme.getColor(Theme.key_chat_messagePanelBackground, resourcesProvider);
+            @Override
+            public void draw(@NonNull Canvas canvas) {
+                final int c = Theme.getColor(Theme.key_chat_messagePanelBackground, resourcesProvider);
+                if (c != lastColor) {
+                    lastColor = c;
+                    setColor(c);
+                }
+                super.draw(canvas);
+            }
+        };
         iosTextCapsuleBg.setShape(GradientDrawable.RECTANGLE);
         iosTextCapsuleBg.setCornerRadius(dp(19));
-        applyIosCapsuleColor();
+        iosTextCapsuleBg.setColor(Theme.getColor(Theme.key_chat_messagePanelBackground, resourcesProvider));
         iosTextCapsuleView = new View(getContext());
         iosTextCapsuleView.setBackground(iosTextCapsuleBg);
         addView(iosTextCapsuleView, 0);
@@ -833,16 +846,27 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         final int avatarX = width - dp(4) - avatarImageView.getMeasuredWidth();
         avatarImageView.layout(avatarX, 1 + viewTop, avatarX + avatarImageView.getMeasuredWidth(), 1 + viewTop + avatarImageView.getMeasuredHeight());
 
-        // iOS style: name and status centered in the widget (by real text width)
-        final int titleX = (width - titleTextView.getTextWidth()) / 2;
+        // iOS style: name and status centered on the screen. The widget can be
+        // narrower than the screen (right margin), so use the parent width for
+        // true screen centering.
+        final int textW = titleTextView.getTextWidth();
+        int screenW = width;
+        final android.view.ViewParent parentView = getParent();
+        if (parentView instanceof View) {
+            screenW = ((View) parentView).getMeasuredWidth();
+        }
+        final int titleX = (screenW - textW) / 2;
+        final int titleGlyphTop;
         SimpleTextView titleTextLargerCopyView = this.titleTextLargerCopyView.get();
         if (getSubtitleTextView().getVisibility() != GONE) {
-            titleTextView.layout(titleX, viewTop + dp(1.66f) - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), viewTop + titleTextView.getTextHeight() + dp(1.66f) - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
+            titleGlyphTop = viewTop + dp(1.66f);
+            titleTextView.layout(titleX, titleGlyphTop - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), titleGlyphTop + titleTextView.getTextHeight() - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
             if (titleTextLargerCopyView != null) {
                 titleTextLargerCopyView.layout(titleX, viewTop + dp(1.66f), titleX + titleTextLargerCopyView.getMeasuredWidth(), viewTop + titleTextLargerCopyView.getTextHeight() + dp(1.66f));
             }
         } else {
-            titleTextView.layout(titleX, viewTop + dp(11) - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), viewTop + titleTextView.getTextHeight() + dp(11) - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
+            titleGlyphTop = viewTop + dp(11);
+            titleTextView.layout(titleX, titleGlyphTop - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), titleGlyphTop + titleTextView.getTextHeight() - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
             if (titleTextLargerCopyView != null) {
                 titleTextLargerCopyView.layout(titleX, viewTop + dp(10), titleX + titleTextLargerCopyView.getMeasuredWidth(), viewTop + titleTextLargerCopyView.getTextHeight() + dp(10));
             }
@@ -876,7 +900,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         } else {
             subtitleW = 0;
         }
-        final int subtitleX = (width - subtitleW) / 2;
+        final int subtitleX = (screenW - subtitleW) / 2;
         if (subtitleTextView != null) {
             subtitleTextView.layout(subtitleX, subtitleTop, subtitleX + subtitleTextView.getMeasuredWidth(), subtitleTop + subtitleTextView.getTextHeight());
         } else if (animatedSubtitleTextView != null) {
@@ -886,40 +910,21 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (subtitleTextLargerCopyView != null) {
             subtitleTextLargerCopyView.layout(subtitleX, subtitleTop, subtitleX + subtitleTextLargerCopyView.getMeasuredWidth(), subtitleTop + subtitleTextLargerCopyView.getTextHeight());
         }
+        // Tele iOS: capsule wraps BOTH the name and the status line (recomputed
+        // from the live text widths), so statuses and channel member counts are
+        // never rendered outside of the capsule
         layoutIosTextCapsule();
     }
 
-    // Tele iOS: capsule color follows the theme (white in light mode, dark gray in
-    // dark mode) so the themed title/status colors are always clearly readable
-    private int iosCapsuleColor() {
-        return Theme.isCurrentThemeDark() ? IOS_CAPSULE_COLOR_DARK : IOS_CAPSULE_COLOR_LIGHT;
-    }
-
-    private void applyIosCapsuleColor() {
-        if (iosTextCapsuleBg == null) {
-            return;
-        }
-        int color = iosCapsuleColor();
-        if (color != iosCapsuleColorCurrent) {
-            iosCapsuleColorCurrent = color;
-            iosTextCapsuleBg.setColor(color);
-            if (iosTextCapsuleView != null) {
-                iosTextCapsuleView.invalidate();
-            }
-            invalidate();
-        }
-    }
-
-    // Tele iOS: recompute the floating capsule so it always wraps BOTH the name and
-    // the status line with comfortable padding. Called from onLayout and whenever
-    // title/subtitle text or visibility changes — previously the capsule kept its
-    // old size when the status appeared later (chat info loaded), so member counts
-    // and online statuses were rendered outside of the capsule.
+    // Tele iOS: recompute the floating header capsule so it always wraps BOTH the
+    // name and the status line with comfortable padding. Called from onLayout and
+    // whenever title/subtitle text or visibility changes — previously the capsule
+    // kept its old size when the status appeared later (chat info loaded), so
+    // member counts and online statuses were rendered outside of the capsule.
     private void layoutIosTextCapsule() {
         if (iosTextCapsuleView == null || titleTextView == null || avatarImageView == null) {
             return;
         }
-        applyIosCapsuleColor();
         final int width = getMeasuredWidth();
         if (width <= 0) {
             return;
@@ -927,28 +932,40 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         final int actionBarHeight = ActionBar.getCurrentActionBarHeight();
         final int viewTop = (actionBarHeight - avatarImageView.getMeasuredHeight() - 2) / 2 + (occupyStatusBar ? AndroidUtilities.statusBarHeight : 0);
         final int subtitleTop = viewTop + dp(glassMode ? 23.66f : 24);
-        final int titleTextTop = viewTop + dp(1.66f);
+        final View sub = getSubtitleTextView();
+        final boolean subtitleRow = sub != null && sub.getVisibility() != GONE;
+        final int titleTextTop = viewTop + (subtitleRow ? dp(1.66f) : dp(11));
 
         final int titleW = titleTextView.getTextWidth();
-        final int titleX = (width - titleW) / 2;
+        if (titleW <= 0) {
+            iosTextCapsuleView.layout(0, 0, 0, 0);
+            iosCapsuleBounds.setEmpty();
+            return;
+        }
+        // iOS style: name and status are centered on the real screen width (the
+        // widget itself can be narrower due to right margins)
+        int screenW = width;
+        final android.view.ViewParent parentView = getParent();
+        if (parentView instanceof View) {
+            screenW = ((View) parentView).getMeasuredWidth();
+        }
+        final int titleX = (screenW - titleW) / 2;
         int ct = titleTextTop - dp(6);
         int cb = titleTextTop + titleTextView.getTextHeight() + dp(6);
         int cl = titleX - dp(13);
         int cr = titleX + titleW + dp(13);
-
-        View sub = getSubtitleTextView();
-        if (sub != null && sub.getVisibility() == VISIBLE && sub.getAlpha() > 0.1f) {
+        if (subtitleRow && sub.getAlpha() > 0.1f) {
             int subW = sub instanceof SimpleTextView ? ((SimpleTextView) sub).getTextWidth() : sub.getMeasuredWidth();
             int subH = sub instanceof SimpleTextView ? ((SimpleTextView) sub).getTextHeight() : sub.getMeasuredHeight();
             if (subW > 0 && subH > 0) {
-                int subX = (width - subW) / 2;
+                int subX = (screenW - subW) / 2;
                 cb = Math.max(cb, subtitleTop + subH + dp(6));
                 cl = Math.min(cl, subX - dp(13));
                 cr = Math.max(cr, subX + subW + dp(13));
             }
         }
         cl = Math.max(dp(2), cl);
-        cr = Math.min(width - dp(2), cr);
+        cr = Math.min(screenW - dp(2), cr);
         if (cr <= cl) {
             return;
         }
@@ -1129,8 +1146,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             rightDrawableContentDescription = null;
         }
         checkActionBar(animated);
-        // Tele iOS: the title width may have changed — keep the capsule wrapping it
-        layoutIosTextCapsule();
+        // Tele iOS: the title width may have changed — keep the capsule wrapped
+        post(this::layoutIosTextCapsule);
     }
 
     private Drawable emojiStatusDefaultDrawable;
@@ -1139,8 +1156,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
 
 
     public void setSubtitle(CharSequence value) {
-        // Tele iOS: capsule must re-wrap the subtitle whenever it changes
-        post(this::layoutIosTextCapsule);
         if (lastSubtitle == null) {
             if (subtitleTextView != null) {
                 subtitleTextView.setText(value);
@@ -1151,6 +1166,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             lastSubtitle = value;
         }
         checkActionBar(true);
+        // Tele iOS: subtitle text changed — keep the capsule wrapped around it
+        post(this::layoutIosTextCapsule);
     }
 
     public ImageView getTimeItem() {
@@ -1232,9 +1249,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (parentFragment == null) {
             return;
         }
-        // Tele iOS: capsule must re-wrap the subtitle whenever it changes;
-        // posted so it runs after every branch of this method (visibility, text)
-        post(this::layoutIosTextCapsule);
         if (parentFragment.getChatMode() == ChatActivity.MODE_EDIT_BUSINESS_LINK) {
             setSubtitle(BusinessLinksController.stripHttps(parentFragment.businessLink.link));
             return;
@@ -1305,9 +1319,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                             if (titleAnimation == animation) {
                                 getSubtitleTextView().setVisibility(INVISIBLE);
                                 titleAnimation = null;
+                                // Tele iOS: subtitle hidden — shrink the capsule
+                                layoutIosTextCapsule();
                             }
-                            // Tele iOS: subtitle is now hidden — shrink the capsule
-                            layoutIosTextCapsule();
                         }
                     });
                     titleAnimation.setDuration(180);
@@ -1316,6 +1330,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     titleTextView.setTranslationY(dp(9.7f));
                     getSubtitleTextView().setAlpha(0.0f);
                     getSubtitleTextView().setVisibility(INVISIBLE);
+                    // Tele iOS: subtitle hidden — shrink the capsule
+                    layoutIosTextCapsule();
                 }
                 return;
             }
@@ -1413,7 +1429,7 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                             @Override
                             public void onAnimationEnd(Animator animation) {
                                 titleAnimation = null;
-                                // Tele iOS: subtitle is now visible — expand the capsule
+                                // Tele iOS: subtitle is visible again — expand the capsule
                                 layoutIosTextCapsule();
                             }
                         });
@@ -1422,6 +1438,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
                     } else {
                         titleTextView.setTranslationY(0.0f);
                         getSubtitleTextView().setAlpha(1.0f);
+                        // Tele iOS: subtitle is visible again — expand the capsule
+                        layoutIosTextCapsule();
                     }
                 }
             }
@@ -1456,6 +1474,8 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             lastSubtitle = newSubtitle;
         }
         checkActionBar(animated);
+        // Tele iOS: subtitle (status / member count) may have changed size
+        post(this::layoutIosTextCapsule);
     }
 
     public static CharSequence getChatSubtitle(TLRPC.Chat chat, TLRPC.ChatFull info, int onlineCount) {
@@ -1683,7 +1703,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (parentFragment != null) {
             NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.didUpdateConnectionState);
             NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
-            NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetNewTheme);
             if (parentFragment.getChatMode() == ChatActivity.MODE_SAVED) {
                 NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.savedMessagesDialogsUpdate);
             }
@@ -1704,7 +1723,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (parentFragment != null) {
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.didUpdateConnectionState);
             NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
-            NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didSetNewTheme);
             if (parentFragment.getChatMode() == ChatActivity.MODE_SAVED) {
                 NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.savedMessagesDialogsUpdate);
             }
@@ -1735,10 +1753,6 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             invalidate();
         } else if (id == NotificationCenter.savedMessagesDialogsUpdate) {
             updateSubtitle(true);
-        } else if (id == NotificationCenter.didSetNewTheme) {
-            // Tele iOS: capsule recolors itself so text stays readable after a theme switch
-            applyIosCapsuleColor();
-            layoutIosTextCapsule();
         }
     }
 

@@ -4600,60 +4600,22 @@ public class ChatActivity extends BaseFragment implements
             getConnectionsManager().bindRequestToGuid(req, classGuid);
         } else {
             actionBar.addView(avatarContainer, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
-            // iOS style: keep the right-side menu clear of the avatar
-            if (actionBar.menu != null) {
-                actionBar.menu.setTranslationX(-dp(46));
-            }
             // iOS style: search / attach / options icons are hidden from the chat header,
             // they live on the profile screen instead
-            iosCleanHeader = chatMode == 0 && !isReport() && !UserObject.isReplyUser(currentUser);
-
-            // iOS style: circle behind the back chevron (MRTelegram look).
-            // Tele iOS: the circle adapts to the current theme — white in light
-            // mode, dark gray in dark mode — so the themed chevron stays clearly
-            // visible in both modes.
-            android.graphics.drawable.Drawable iosBackCapsuleBg = new android.graphics.drawable.Drawable() {
-                private final Paint iosBackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                @Override
-                public void draw(Canvas canvas) {
-                    iosBackPaint.setColor(Theme.isCurrentThemeDark() ? 0xFF2B2B2F : 0xFFFFFFFF);
-                    Rect b = getBounds();
-                    canvas.drawRoundRect(b.left, b.top, b.right, b.bottom, AndroidUtilities.dp(17), AndroidUtilities.dp(17), iosBackPaint);
-                }
-                @Override
-                public void setAlpha(int alpha) {
-                }
-                @Override
-                public void setColorFilter(android.graphics.ColorFilter colorFilter) {
-                }
-                @Override
-                public int getOpacity() {
-                    return android.graphics.PixelFormat.TRANSLUCENT;
-                }
-            };
-            FrameLayout iosBackCapsule = new FrameLayout(context);
-            iosBackCapsule.setPadding(0, AndroidUtilities.statusBarHeight + dp(4), 0, dp(4));
-            View iosBackCapsuleInner = new View(context);
-            iosBackCapsuleInner.setBackground(iosBackCapsuleBg);
-            iosBackCapsule.addView(iosBackCapsuleInner, LayoutHelper.createFrame(50, LayoutHelper.MATCH_PARENT));
-            ImageView iosBackChevron = new ImageView(context) {
-                private int iosChevronDarkState = -1;
-                @Override
-                protected void onDraw(Canvas canvas) {
-                    int dark = Theme.isCurrentThemeDark() ? 1 : 0;
-                    if (dark != iosChevronDarkState) {
-                        iosChevronDarkState = dark;
-                        setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_windowBackgroundWhiteBlackText), PorterDuff.Mode.SRC_IN));
-                    }
-                    super.onDraw(canvas);
-                }
-            };
-            iosBackChevron.setImageResource(R.drawable.ic_ios_back_chevron);
-            iosBackChevron.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_windowBackgroundWhiteBlackText), PorterDuff.Mode.SRC_IN));
-            iosBackCapsule.addView(iosBackChevron, LayoutHelper.createFrame(24, 24, Gravity.CENTER));
-            iosBackCapsule.setContentDescription(LocaleController.getString(R.string.Back));
-            iosBackCapsule.setOnClickListener(v -> onBackPressed(true));
-            actionBar.addView(iosBackCapsule, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP, 2, 0, 0, 0));
+            iosCleanHeader = (chatMode == 0 || chatMode == MODE_SAVED) && !isReport() && !UserObject.isReplyUser(currentUser);
+            if (!iosCleanHeader && actionBar.menu != null) {
+                actionBar.menu.setTranslationX(-dp(46));
+            }
+            // iOS style: round themed capsule behind the native back chevron (MRTelegram look).
+            // We restyle the existing ActionBar back button instead of adding an overlay view,
+            // so the back button keeps its native (and working) click handling and is visible
+            // in both light and dark themes.
+            ImageView iosBackView = actionBar.backButtonImageView;
+            if (iosBackView != null) {
+                iosBackView.setBackground(new android.graphics.drawable.InsetDrawable(
+                    new IosThemedCircleDrawable(Theme.key_chat_messagePanelBackground, getResourceProvider()),
+                    dp(5), dp(5), dp(5), dp(5)));
+            }
 
             // iOS style: unread chats counter next to the back button
             iosUnreadBadge = new TextView(context);
@@ -5100,8 +5062,10 @@ public class ChatActivity extends BaseFragment implements
             glassBackgroundDrawableFactory.create(chatInputViewsContainer, blurredBackgroundColorProvider));
         chatInputViewsContainer.setUnderKeyboardBackgroundDrawable(
             glassBackgroundDrawableFactoryFrosted.create(chatInputViewsContainer, blurredBackgroundColorProvider));
-        // iOS style: leave room on the left for the attach button outside the island
-        chatInputViewsContainer.setInputBubbleOffsets(dp(64), dp(10));
+        // iOS style: leave room on the left for the attach button and on the right
+        // for the mic circle outside the input capsule, so the capsule never runs
+        // underneath the mic
+        chatInputViewsContainer.setInputBubbleOffsets(dp(64), dp(48));
 
 
         chatInputBubbleContainer = chatInputViewsContainer.getInputIslandBubbleContainer();
@@ -8962,7 +8926,8 @@ public class ChatActivity extends BaseFragment implements
         });
         bottomChannelButtonsLayout.setOnButtonsTotalWidthChanged((l, r) -> {
             // iOS style: the input island always leaves room for the attach button
-            chatInputViewsContainer.setInputBubbleOffsets(Math.max(l, dp(64)), r + dp(10));
+            // on the left and for the mic circle on the right
+            chatInputViewsContainer.setInputBubbleOffsets(Math.max(l, dp(64)), r + dp(48));
         });
 
         chatInputBubbleContainer.addView(bottomChannelButtonsLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 56, Gravity.BOTTOM, 0, 0, 0, (44 - 56) / 2));
@@ -19527,7 +19492,13 @@ public class ChatActivity extends BaseFragment implements
                 }*/ else {
                     showSearchAsIcon = false;
                 }
-                if (showSearchAsIcon || showAudioCallAsIcon || UserObject.isBotForumWithEditableTopics(currentUser)) {
+                if (iosCleanHeader) {
+                    if (avatarContainer != null && avatarContainer.getLayoutParams() != null) {
+                        // iOS style: clean header has no right-side menu items,
+                        // so the avatar sits near the right edge like on iOS
+                        ((ViewGroup.MarginLayoutParams) avatarContainer.getLayoutParams()).rightMargin = AndroidUtilities.dp(8);
+                    }
+                } else if (showSearchAsIcon || showAudioCallAsIcon || UserObject.isBotForumWithEditableTopics(currentUser)) {
                     if (avatarContainer != null && avatarContainer.getLayoutParams() != null) {
                         ((ViewGroup.MarginLayoutParams) avatarContainer.getLayoutParams()).rightMargin = AndroidUtilities.dp(chatMode == MODE_SAVED ? 52 : 92);
                     }
@@ -33525,7 +33496,10 @@ public class ChatActivity extends BaseFragment implements
             if (optionsView != null) {
                 scrimPopupContainerLayout.addView(optionsView);
             } else {
-                final boolean tags = getUserConfig().getClientUserId() == getDialogId();
+                // Tele iOS: in Saved Messages prefer the real reactions row (emoji
+                // reactions) over the tags row when reactions are available, so the
+                // long-press menu always shows the reaction emojis
+                final boolean tags = getUserConfig().getClientUserId() == getDialogId() && !isReactionsAvailable;
                 reactionsLayout = new ReactionsContainerLayout(tags ? ReactionsContainerLayout.TYPE_TAGS : ReactionsContainerLayout.TYPE_DEFAULT, ChatActivity.this, contentView.getContext(), currentAccount, getResourceProvider());
                 reactionsLayout.setBackgroundFactory(scrimBlur3Factory, BlurredBackgroundProviderImpl.messageMenuReactionsBackground(resourceProvider));
                 if (tags) {
@@ -33804,17 +33778,24 @@ public class ChatActivity extends BaseFragment implements
             int minY = (int) (chatListView.getY() + dp(24));
             int maxY = totalHeight - height - dp(8);
             if (height < totalHeight) {
-                popupY = (int) (chatListView.getY() + v.getTop() + y);
+                // Tele iOS: the menu (with the reactions row) is placed BELOW the
+                // message when the message sits in the top half of the screen, and
+                // ABOVE it when the message sits in the bottom half (iOS behavior).
+                int messageScreenY = (int) (chatListView.getY() + v.getTop() + y);
+                int messageHeight = v.getMeasuredHeight();
                 if (isInsideContainer) {
                     int[] location = new int[2];
                     v.getLocationInWindow(location);
-                    popupY = (int) (location[1] + y);
+                    messageScreenY = (int) (location[1] + y);
 
                     chatListView.getLocationInWindow(location);
                     minY = dp(24);
                     maxY = Math.min(location[1] + chatListView.getMeasuredHeight(), AndroidUtilities.displaySize.y) - dp(8) - height;
-                } else if (height - backgroundPaddings.top - backgroundPaddings.bottom > AndroidUtilities.dp(240)) {
-                    popupY += AndroidUtilities.dp(240) - height;
+                }
+                if (messageScreenY + messageHeight / 2f <= totalHeight / 2f) {
+                    popupY = messageScreenY + messageHeight + dp(12);
+                } else {
+                    popupY = messageScreenY - height - dp(12);
                 }
                 popupY = Utilities.clamp(popupY, maxY, minY);
             } else {
@@ -33848,8 +33829,8 @@ public class ChatActivity extends BaseFragment implements
             chatListView.stopScroll();
             chatLayoutManager.setCanScrollVertically(false);
             // Tele iOS: blur + dim the whole screen behind the message context menu
-            // (iOS-style long press). Only the selected message stays unblurred,
-            // reactions bar and menu appear above/below it.
+            // (iOS-style long press). Only the selected message stays unblurred; the
+            // reactions row and the menu appear below/above the message.
             dimBehindView(v, true, true);
             hideHints(false);
             if (topUndoView != null) {
@@ -44815,6 +44796,34 @@ public class ChatActivity extends BaseFragment implements
 
     public Theme.ResourcesProvider getResourceProvider() {
         return themeDelegate;
+    }
+
+    // iOS style (Tele iOS): a circle drawable whose color always follows the current
+    // theme, so header capsules stay visible in both light and dark mode without
+    // needing explicit theme-change hooks.
+    private static class IosThemedCircleDrawable extends GradientDrawable {
+        private final int colorKey;
+        private final Theme.ResourcesProvider resourcesProvider;
+        private int lastColor;
+
+        IosThemedCircleDrawable(int key, Theme.ResourcesProvider provider) {
+            super();
+            colorKey = key;
+            resourcesProvider = provider;
+            setShape(GradientDrawable.OVAL);
+            lastColor = Theme.getColor(colorKey, resourcesProvider);
+            setColor(lastColor);
+        }
+
+        @Override
+        public void draw(@NonNull Canvas canvas) {
+            final int c = Theme.getColor(colorKey, resourcesProvider);
+            if (c != lastColor) {
+                lastColor = c;
+                setColor(c);
+            }
+            super.draw(canvas);
+        }
     }
 
     public Runnable onThemeChange;

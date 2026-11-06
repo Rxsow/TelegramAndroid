@@ -265,7 +265,8 @@ public class ChatInputViewsContainer extends FrameLayout {
             getMeasuredWidth() - Math.round(inputBubbleOffsetRight),
             inputBubbleHeightRound
         );
-        tmpRect.inset(0, -dp(7));
+        // iOS style: slimmer input capsule (was -dp(7) on each side)
+        tmpRect.inset(0, -dp(3));
         tmpRect.offset(0, blurTop + (int) bubbleInputTranlationY);
 
         blurredBackgroundDrawable.setBounds(tmpRect);

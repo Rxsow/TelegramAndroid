@@ -26,6 +26,7 @@ public class BackDrawable extends Drawable {
 
     private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint prevPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Paint crossPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private boolean reverseAngle;
     private long lastFrameTime;
     private boolean animationInProgress;
@@ -126,21 +127,28 @@ public class BackDrawable extends Drawable {
         if (arrowRotation != 0) {
             canvas.rotate(arrowRotation);
         }
-        float rotation = currentRotation;
+        // iOS style (Tele iOS): draw a thin chevron instead of the Android
+        // stem-and-head arrow. When the drawable rotates (search / close states)
+        // a second diagonal fades in so the final state still reads as a close X.
         canvas.translate(-AndroidUtilities.dp(0.66f)/* * (rotation)*/, 0);
+        float rotation = currentRotation;
         if (!alwaysClose) {
             canvas.rotate(currentRotation * (reverseAngle ? -225 : 135));
         } else {
             canvas.rotate(135 + currentRotation * (reverseAngle ? -180 : 180));
             rotation = 1.0f;
         }
-        canvas.drawLine(AndroidUtilities.dp(AndroidUtilities.lerp(-6.75f, -8f, rotation)), 0, AndroidUtilities.dp(8) - (paint.getStrokeWidth() / 2f) * (1f - rotation), 0, paint);
-        float startYDiff = AndroidUtilities.dp(-0.25f);
-        float endYDiff = AndroidUtilities.dp(AndroidUtilities.lerp(7f, 8f, rotation)) - (paint.getStrokeWidth() / 4f) * (1f - rotation);
-        float startXDiff = AndroidUtilities.dp(AndroidUtilities.lerp(-7f - 0.25f, 0f, rotation));
-        float endXDiff = 0;
-        canvas.drawLine(startXDiff, -startYDiff, endXDiff, -endYDiff, paint);
-        canvas.drawLine(startXDiff, startYDiff, endXDiff, endYDiff, paint);
+        float apexX = AndroidUtilities.dp(-4f) + rotation * AndroidUtilities.dp(4.5f);
+        float armX = AndroidUtilities.dp(6.5f);
+        float armY = AndroidUtilities.dp(6.5f);
+        canvas.drawLine(apexX, 0, apexX + armX, -armY, paint);
+        canvas.drawLine(apexX, 0, apexX + armX, armY, paint);
+        if (rotation > 0f) {
+            crossPaint.set(paint);
+            crossPaint.setAlpha((int) (255 * rotation));
+            canvas.drawLine(apexX, -armY, apexX + armX, armY, crossPaint);
+            canvas.drawLine(apexX, armY, apexX + armX, -armY, crossPaint);
+        }
         canvas.restore();
     }
 

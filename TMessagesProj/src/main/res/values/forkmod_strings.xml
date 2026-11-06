@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="CustomFontTitle">Custom font</string>
+    <string name="CustomFontChoose">Choose font file (TTF / OTF)</string>
+    <string name="CustomFontReset">Reset to default font</string>
+    <string name="CustomFontRestart">Font applied successfully. The app will now restart to apply it everywhere.</string>
+    <string name="CustomFontInvalid">This file is not a valid font file.</string>
+</resources>

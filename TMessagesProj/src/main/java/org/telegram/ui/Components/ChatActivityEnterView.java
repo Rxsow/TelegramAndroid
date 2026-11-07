@@ -47,6 +47,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.InsetDrawable;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
@@ -2943,7 +2944,8 @@ public class ChatActivityEnterView extends FrameLayout implements
             attachButton.setScaleType(ImageView.ScaleType.CENTER);
             attachButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
             attachButton.setImageResource(R.drawable.msg_input_attach2);
-            attachButton.setBackground(Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(44), getThemedColor(Theme.key_chat_messagePanelBackground), getThemedColor(Theme.key_listSelector)));
+            // iOS style: paperclip circle same size & bottom offset as the mic circle (38dp, 3dp inset)
+            attachButton.setBackground(new InsetDrawable(Theme.createSimpleSelectorCircleDrawable(AndroidUtilities.dp(38), getThemedColor(Theme.key_chat_messagePanelBackground), getThemedColor(Theme.key_listSelector)), AndroidUtilities.dp(3)));
             // iOS style: attach button lives outside the input capsule, on the left, inside a circle
             textFieldContainer.addView(attachButton, LayoutHelper.createFrame(DEFAULT_HEIGHT, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.LEFT, 2, 0, 0, 0));
             attachButton.setContentDescription(getString(R.string.AccDescrAttachButton));
@@ -6753,8 +6755,8 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         audioVideoButtonContainer.setAlpha(audioVideoButtonContainerForbidden ? 0.5f : 1.0f);
         audioVideoButtonContainer.invalidate();
-        audioVideoSendButton.setColorFilter(new PorterDuffColorFilter(audioVideoButtonContainerForbidden ?
-            getThemedColor(Theme.key_glass_defaultIcon) : Color.WHITE, PorterDuff.Mode.SRC_IN));
+        // iOS style: mic/camera icon follows the theme (visible on light & dark circles, same tint as paperclip)
+        audioVideoSendButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.SRC_IN));
         audioVideoSendButton.invalidate();
         updateFieldHint(false);
         boolean currentModeVideo = isInVideoMode;
@@ -10697,8 +10699,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (botKeyboardView != null) {
             botKeyboardView.updateColors();
         }
-        // iOS style: dark mic icon on the white circle (MRTelegram look)
-        audioVideoSendButton.setColorFilter(new PorterDuffColorFilter(audioVideoButtonContainerForbidden ? getThemedColor(Theme.key_glass_defaultIcon) : getThemedColor(Theme.key_windowBackgroundWhiteBlackText), PorterDuff.Mode.SRC_IN));
+        // iOS style: mic/camera icon follows the theme (visible on light & dark circles, same tint as paperclip)
+        audioVideoSendButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.SRC_IN));
         emojiButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelIcons), PorterDuff.Mode.SRC_IN));
         emojiButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
         deleteRichDraftButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.SRC_IN));

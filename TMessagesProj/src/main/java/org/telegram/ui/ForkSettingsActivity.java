@@ -295,7 +295,13 @@ public class ForkSettingsActivity extends BaseFragment {
             row.addView(swatch, LayoutHelper.createLinear(26, 26, 0, 0, 12, 0));
             row.addView(titleView, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
             row.addView(value, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 10, 0));
-            row.setOnClickListener(v -> showBubbleColorPicker(outgoing));
+            row.setOnClickListener(v -> {
+                try {
+                    showBubbleColorPicker(outgoing);
+                } catch (Exception e) {
+                    FileLog.e("ForkSettingsActivity: bubble color picker failed", e);
+                }
+            });
             return row;
         }
 
@@ -546,7 +552,9 @@ public class ForkSettingsActivity extends BaseFragment {
         fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
         FrameLayout frameLayout = (FrameLayout) fragmentView;
 
-        listView = new UniversalRecyclerView(this, this::fillItems, this::onClick, null);
+        // Tele iOS: fillItems is wrapped so that a failure inside any settings row can
+        // never crash the whole app – the page must always open (errors go to FileLog)
+        listView = new UniversalRecyclerView(this, this::fillItemsSafe, this::onClick, null);
         listView.setGlowColor(Theme.getColor(Theme.key_avatar_backgroundActionBarBlue));
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
 
@@ -605,6 +613,36 @@ public class ForkSettingsActivity extends BaseFragment {
         } else {
             fillSettings(items);
         }
+    }
+
+    private void fillItemsSafe(ArrayList<UItem> items, UniversalAdapter adapter) {
+        try {
+            fillItems(items, adapter);
+        } catch (Exception e) {
+            reportSectionError("settings rows", e);
+        }
+    }
+
+    // Tele iOS: surface a section failure as a one-time toast so the exact
+    // exception class/message is visible even without logcat access
+    private boolean sectionErrorReported;
+
+    private void reportSectionError(String what, Exception e) {
+        FileLog.e("ForkSettingsActivity: " + what + " failed", e);
+        if (sectionErrorReported) {
+            return;
+        }
+        sectionErrorReported = true;
+        try {
+            android.content.Context ctx = getParentActivity();
+            if (ctx != null) {
+                String msg = "Tele iOS " + what + ": " + e.getClass().getSimpleName();
+                if (e.getMessage() != null && e.getMessage().length() < 120) {
+                    msg += ": " + e.getMessage();
+                }
+                android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show();
+            }
+        } catch (Exception ignore) {}
     }
 
     private void fillSearchResults(ArrayList<UItem> items) {
@@ -709,14 +747,27 @@ public class ForkSettingsActivity extends BaseFragment {
         items.add(UItem.asSettingsCell(ID_CUSTOM_FONT, ApplicationLoader.applicationContext.getString(R.string.CustomFontTitle), ModFont.currentStateText()));
         items.add(UItem.asShadow(null));
 
-        items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSBubbleSection)));
-        bubbleColorsCell = new BubbleColorsCell(getContext());
-        items.add(UItem.asCustom(ID_BUBBLE_PREVIEW, bubbleColorsCell));
-        items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSBubbleColorsInfo)));
+        // Tele iOS: message bubble colors + live preview (guarded so a failure in this
+        // optional section can never prevent the settings page from opening)
+        try {
+            items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSBubbleSection)));
+            if (bubbleColorsCell == null) {
+                bubbleColorsCell = new BubbleColorsCell(getContext());
+            }
+            items.add(UItem.asCustom(ID_BUBBLE_PREVIEW, bubbleColorsCell));
+            items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSBubbleColorsInfo)));
+        } catch (Exception e) {
+            reportSectionError("bubble colors section", e);
+        }
 
-        items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSNotificationIcon)));
-        items.add(UItem.asSettingsCell(ID_NOTIFICATION_ICON, LocaleController.getString(R.string.TeleIOSNotificationIcon), ForkNotificationIcons.currentName()));
-        items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSNotificationIconInfo)));
+        // Tele iOS: status bar notification icon picker (guarded the same way)
+        try {
+            items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSNotificationIcon)));
+            items.add(UItem.asSettingsCell(ID_NOTIFICATION_ICON, LocaleController.getString(R.string.TeleIOSNotificationIcon), ForkNotificationIcons.currentName()));
+            items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSNotificationIconInfo)));
+        } catch (Exception e) {
+            reportSectionError("notification icon section", e);
+        }
 
         items.add(UItem.asHeader(LocaleController.getString(R.string.AvatarShape)));
         items.add(searchable(UItem.asSlideView(
@@ -963,7 +1014,11 @@ public class ForkSettingsActivity extends BaseFragment {
         } else if (id == ID_CUSTOM_FONT) {
             showCustomFontDialog();
         } else if (id == ID_NOTIFICATION_ICON) {
-            showNotificationIconDialog();
+            try {
+                showNotificationIconDialog();
+            } catch (Exception e) {
+                FileLog.e("ForkSettingsActivity: notification icon dialog failed", e);
+            }
 
         } else if (id == ID_SYNC_PINS) {
             toggle("syncPins", item, view);

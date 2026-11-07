@@ -1579,7 +1579,13 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
             }
         }
         if (additionalSubTitleOverlayContainer != null) {
-            int textTop = getCurrentActionBarHeight() / 2 + (getCurrentActionBarHeight() / 2 - additionalSubTitleOverlayContainer.getMeasuredHeight()) / 2 - dp(2);
+            int textTop;
+            if (titleTextView[0] == null || titleTextView[0].getVisibility() == GONE || TextUtils.isEmpty(titleTextView[0].getText())) {
+                // no overlay title (e.g. connecting to proxy) – center the subtitle on the whole action bar line
+                textTop = (getCurrentActionBarHeight() - additionalSubTitleOverlayContainer.getMeasuredHeight()) / 2;
+            } else {
+                textTop = getCurrentActionBarHeight() / 2 + (getCurrentActionBarHeight() / 2 - additionalSubTitleOverlayContainer.getMeasuredHeight()) / 2 - dp(2);
+            }
             int centeredLeft = (getMeasuredWidth() - additionalSubTitleOverlayContainer.getMeasuredWidth()) / 2;
             additionalSubTitleOverlayContainer.layout(centeredLeft, additionalTop + textTop, centeredLeft + additionalSubTitleOverlayContainer.getMeasuredWidth(), additionalTop + textTop + additionalSubTitleOverlayContainer.getMeasuredHeight());
         }
@@ -1729,8 +1735,9 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
             }
         }
         if (titleId == R.string.ConnectingToProxyWithDots || titleId == R.string.ConnectingToProxy) {
-            // iOS style: compact centered "Proxy" title while connecting; details go to the small subtitle
-            textToSet = LocaleController.getString(R.string.MenuProxyTitle);
+            // iOS style: no big title while connecting – proxy access stays in the 3-dot menu;
+            // only the small centered subtitle is shown, replaced by the shield badge when connected
+            textToSet = "";
         }
         titleOverlayShown = title != null;
         if ((textToSet != null && titleTextView[0] == null) || getMeasuredWidth() == 0 || (titleTextView[0] != null && titleTextView[0].getVisibility() != View.VISIBLE)) {
@@ -2404,6 +2411,8 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 }
             };
             additionalSubTitleOverlayContainer.setClipChildren(false);
+            // iOS style: half of the previous 14dp – a small status line, not a headline
+            additionalSubTitleOverlayContainer.setSubtitleTextSizeDp(7);
             addView(additionalSubTitleOverlayContainer);
         }
         return additionalSubTitleOverlayContainer;

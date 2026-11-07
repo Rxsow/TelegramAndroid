@@ -30,6 +30,13 @@ public class ActionBarAnimatedSubtitleOverlayContainer extends FrameLayout imple
     private final ReplaceAnimator<SimpleTextViewReplaceable> titleOverlayAnimator =
             new ReplaceAnimator<>(this, CubicBezierInterpolator.EASE_OUT_QUINT, 350);
 
+    // default subtitle size; callers can override without affecting other users of this class
+    private float subtitleTextSizeDp = 14;
+
+    public void setSubtitleTextSizeDp(float sizeDp) {
+        this.subtitleTextSizeDp = sizeDp;
+    }
+
     public ActionBarAnimatedSubtitleOverlayContainer(@NonNull Context context, Theme.ResourcesProvider resourcesProvider, EllipsizeSpanAnimator ellipsizeSpanAnimator) {
         super(context);
         this.resourcesProvider = resourcesProvider;
@@ -54,7 +61,7 @@ public class ActionBarAnimatedSubtitleOverlayContainer extends FrameLayout imple
         final SimpleTextViewReplaceable overlayTextView = new SimpleTextViewReplaceable(getContext());
         overlayTextView.setTextColor(Theme.getColor(Theme.key_telegram_color_dialogsLogo, resourcesProvider));
         overlayTextView.setLinkTextColor(Theme.getColor(Theme.key_telegram_color_dialogsLogo, resourcesProvider));
-        overlayTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        overlayTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, subtitleTextSizeDp);
         overlayTextView.setAlpha(0);
         overlayTextView.setText(text);
         if (ellipsize) {

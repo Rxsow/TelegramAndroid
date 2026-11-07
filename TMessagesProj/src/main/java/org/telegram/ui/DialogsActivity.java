@@ -3347,7 +3347,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         actionBar.setItemsColor(getThemedColor(Theme.key_actionBarDefaultIcon), false);
         actionBar.setItemsColor(getThemedColor(Theme.key_actionBarActionModeDefaultIcon), true);
         actionBar.createAdditionalSubTitleOverlayContainer();
-        actionBar.getAdditionalSubTitleOverlayContainer().setTranslationY(-dp(3));
 
         if (inPreviewMode || AndroidUtilities.isTablet() && folderId != 0 && !isArchive()) {
             actionBar.setOccupyStatusBar(false);
@@ -3654,8 +3653,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             };
             View menuCapsuleInner = new View(getContext());
             menuCapsuleInner.setBackground(menuCapsuleBg);
-            menuCapsule.addView(menuCapsuleInner, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, dp(34)));
-            actionBar.addView(menuCapsule, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.TOP, 0, 0, dp(4), 0));
+            // LayoutHelper already applies dp() – passing dp(34) double-converted the height (68dp)
+            // which pushed the capsule bottom behind the search field
+            menuCapsule.addView(menuCapsuleInner, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 34));
+            actionBar.addView(menuCapsule, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.TOP, 0, 0, 4, 0));
             menu.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or2, ob) -> menuCapsule.requestLayout());
             GradientDrawable editCapsuleBg = new GradientDrawable();
             editCapsuleBg.setShape(GradientDrawable.RECTANGLE);
@@ -3677,14 +3678,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             editButton.setBackground(editCapsuleBg);
             editButton.setPadding(dp(14), 0, dp(14), 0);
             editButton.setOnClickListener(v -> presentFragment(new FiltersSetupActivity()));
-            editContainer.addView(editButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, dp(34), Gravity.LEFT));
+            editContainer.addView(editButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 34, Gravity.LEFT));
             actionBar.addView(editContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
 
             // iOS style: centered shield badge, fades in when the proxy is connected
             proxyShieldContainer = new FrameLayout(getContext()) {
                 @Override
                 protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(24)) / 2, 0, 0);
+                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(16)) / 2, 0, 0);
                     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
                 }
             };
@@ -3693,7 +3694,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             proxyShieldIcon.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.SRC_IN));
             proxyShieldIcon.setContentDescription(getString(R.string.ProxySettings));
             proxyShieldIcon.setOnClickListener(v -> presentFragment(new ProxyListActivity()));
-            proxyShieldContainer.addView(proxyShieldIcon, LayoutHelper.createFrame(dp(24), dp(24), Gravity.CENTER_HORIZONTAL));
+            // small iOS-style badge: 16dp (was 24dp double-converted to ~48dp on screen)
+            proxyShieldContainer.addView(proxyShieldIcon, LayoutHelper.createFrame(16, 16, Gravity.CENTER_HORIZONTAL));
             proxyShieldContainer.setVisibility(View.GONE);
             proxyShieldContainer.setAlpha(0f);
             actionBar.addView(proxyShieldContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));

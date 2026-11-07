@@ -664,6 +664,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         default void didPressSideButton(ChatMessageCell cell) {
         }
 
+        // Tele iOS: glass bookmark button – forward the post to Saved Messages
+        default void didPressBookmarkButton(ChatMessageCell cell) {
+        }
+
         default void didQuickShareStart(ChatMessageCell cell, float x, float y) {
         }
 
@@ -1679,6 +1683,12 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     private boolean summarizeButtonPressed;
     private int pressedSideButton;
     private boolean inQuickShareMode;
+    // Tele iOS: glass bookmark button above the share button – quick save to Saved Messages
+    private boolean bookmarkButtonVisible;
+    private boolean bookmarkButtonPressed;
+    private float bookmarkStartX, bookmarkStartY;
+    private Paint bookmarkStrokePaint;
+    private Drawable bookmarkIconDrawable;
     private Path sideButtonPath1, sideButtonPath2;
     private float[] sideButtonPathCorners1, sideButtonPathCorners2;
     private static final int SIDE_BUTTON_SPONSORED_CLOSE = 4;
@@ -4098,6 +4108,12 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 || hasGamePreview || hasInvoicePreview
             );
         }
+        // Tele iOS: the three-dot menu overlay was removed from video messages –
+        // disable its touch region too so the area passes gestures through
+        if (allow && !hasGamePreview && !hasInvoicePreview &&
+            (documentAttachType == DOCUMENT_ATTACH_TYPE_VIDEO || (documentAttachType == DOCUMENT_ATTACH_TYPE_DOCUMENT && currentMessageObject.isVideo()))) {
+            allow = false;
+        }
         if (!allow) {
             return false;
         }
@@ -5169,6 +5185,16 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                         forwardBotPressed = true;
                         result = true;
                     } else if (
+                        bookmarkButtonVisible &&
+                        x >= bookmarkStartX - dp(24) && x <= bookmarkStartX + dp(40) &&
+                        y >= bookmarkStartY - dp(6) && y <= bookmarkStartY + dp(38)
+                    ) {
+                        if (currentMessageObject.isSent()) {
+                            bookmarkButtonPressed = true;
+                        }
+                        result = true;
+                        invalidate();
+                    } else if (
                         sideButtonVisible &&
                         drawSideButton != 0 &&
                         x >= sideStartX - dp(24) && x <= sideStartX + dp(40) &&
@@ -5310,6 +5336,25 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                             }
                         }
                     }
+                } else if (bookmarkButtonPressed) {
+                    if (event.getAction() == MotionEvent.ACTION_UP) {
+                        playSoundEffect(SoundEffectConstants.CLICK);
+                        if (delegate != null) {
+                            delegate.didPressBookmarkButton(this);
+                        }
+                        bookmarkButtonPressed = false;
+                    } else if (event.getAction() == MotionEvent.ACTION_CANCEL) {
+                        bookmarkButtonPressed = false;
+                    } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+                        if (!(
+                            bookmarkButtonVisible &&
+                            x >= bookmarkStartX - dp(24) && x <= bookmarkStartX + dp(40) &&
+                            y >= bookmarkStartY - dp(6) && y <= bookmarkStartY + dp(38)
+                        )) {
+                            bookmarkButtonPressed = false;
+                        }
+                    }
+                    invalidate();
                 } else if (sideButtonPressed) {
                     if (event.getAction() == MotionEvent.ACTION_UP) {
                         playSoundEffect(SoundEffectConstants.CLICK);
@@ -15075,7 +15120,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             if (drawPhotoImage) {
                 if (currentMessageObject.type == MessageObject.TYPE_TEXT) {
                     setDrawableBounds(menuDrawable, otherX = (int) (photoImage.getImageX() + backgroundWidth - dp(56 + (hasLinkPreview ? 12 : 0))), otherY = (int) (photoImage.getImageY() + dp(4)));
-                } else {
+                } else if (!currentMessageObject.isVideo()) {
+                    // Tele iOS: no menu dots on video documents shown as media
                     setDrawableBounds(menuDrawable, otherX = (int) (photoImage.getImageX() + backgroundWidth - dp(40 + (hasLinkPreview ? 12 : 0))), otherY = (int) (photoImage.getImageY() + dp(4)));
                 }
 
@@ -21755,6 +21801,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             sideStartX -= offsetX;
             sideStartY -= offsetY;
         }
+        bookmarkButtonVisible = false;
         sideButtonVisible = true;
         if (drawSideButton == 3) {
             if (!(enterTransitionInProgress && !currentMessageObject.isVoice())) {
@@ -21849,6 +21896,45 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
             if (restoreToSponosoredAlpha != -1) {
                 canvas.restoreToCount(restoreToSponosoredAlpha);
+            }
+
+            // Tele iOS: glass bookmark button above the share button – quick save to Saved Messages
+            if (drawSideButton == 1 && !drawSummarizeButton &&
+                currentMessageObject != null && currentMessageObject.isSent() && !currentMessageObject.isSponsored() &&
+                MessagesController.getGlobalMainSettings().getBoolean("iosQuickSaveBookmark", true)) {
+                bookmarkStartX = sideStartX;
+                bookmarkStartY = sideStartY - dp(38);
+                rect.set(bookmarkStartX, bookmarkStartY, bookmarkStartX + dp(32), bookmarkStartY + dp(32));
+                Paint glassPaint = getThemedPaint(bookmarkButtonPressed ? Theme.key_paint_chatActionBackgroundSelected : Theme.key_paint_chatActionBackground);
+                int savedGlassAlpha = glassPaint.getAlpha();
+                if (!bookmarkButtonPressed) {
+                    glassPaint.setAlpha((int) (savedGlassAlpha * 0.62f));
+                }
+                applyServiceShaderMatrix();
+                canvas.drawRoundRect(rect, dp(16), dp(16), glassPaint);
+                glassPaint.setAlpha(savedGlassAlpha);
+                if (hasGradientService()) {
+                    Paint darkenPaint = Theme.chat_actionBackgroundGradientDarkenPaint;
+                    int savedDarkenAlpha = darkenPaint.getAlpha();
+                    darkenPaint.setAlpha((int) (savedDarkenAlpha * (bookmarkButtonPressed ? 1f : 0.62f)));
+                    canvas.drawRoundRect(rect, dp(16), dp(16), darkenPaint);
+                    darkenPaint.setAlpha(savedDarkenAlpha);
+                }
+                if (bookmarkStrokePaint == null) {
+                    bookmarkStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    bookmarkStrokePaint.setStyle(Paint.Style.STROKE);
+                    bookmarkStrokePaint.setStrokeWidth(dp(1));
+                }
+                bookmarkStrokePaint.setColor(getThemedColor(Theme.key_chat_serviceIcon));
+                bookmarkStrokePaint.setAlpha(64);
+                canvas.drawRoundRect(rect, dp(16), dp(16), bookmarkStrokePaint);
+                if (bookmarkIconDrawable == null) {
+                    bookmarkIconDrawable = getContext().getResources().getDrawable(R.drawable.outline_saved_24).mutate();
+                }
+                bookmarkIconDrawable.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_serviceIcon), PorterDuff.Mode.SRC_IN));
+                setDrawableBounds(bookmarkIconDrawable, bookmarkStartX + dp(4), bookmarkStartY + dp(4));
+                bookmarkIconDrawable.draw(canvas);
+                bookmarkButtonVisible = true;
             }
         }
     }
@@ -25048,17 +25134,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         } else if (currentMessageObject.type == MessageObject.TYPE_VIDEO || currentMessageObject.type == MessageObject.TYPE_PHOTO || currentMessageObject.type == MessageObject.TYPE_EXTENDED_MEDIA_PREVIEW || documentAttachType == DOCUMENT_ATTACH_TYPE_VIDEO || documentAttachType == DOCUMENT_ATTACH_TYPE_GIF) {
             if (photoImage.getVisible() && !currentMessageObject.isRepostPreview) {
                 if (!currentMessageObject.needDrawBluredPreview() && !currentMessageObject.isSponsored() && !currentMessageObject.isRepostPreview && !currentMessageObject.preview && !isSmallImage) {
-                    if (documentAttachType == DOCUMENT_ATTACH_TYPE_VIDEO) {
-                        int oldAlpha = ((BitmapDrawable) Theme.chat_msgMediaMenuDrawable).getPaint().getAlpha();
-                        if (drawMediaCheckBox) {
-                            Theme.chat_msgMediaMenuDrawable.setAlpha((int) (oldAlpha * controlsAlpha * (1.0f - checkBoxAnimationProgress)));
-                        } else {
-                            Theme.chat_msgMediaMenuDrawable.setAlpha((int) (oldAlpha * controlsAlpha));
-                        }
-                        setDrawableBounds(Theme.chat_msgMediaMenuDrawable, otherX = (int) (photoImage.getImageX() + photoImage.getImageWidth() - dp(14)), otherY = (int) (photoImage.getImageY() + dp(8.1f)));
-                        Theme.chat_msgMediaMenuDrawable.draw(canvas);
-                        Theme.chat_msgMediaMenuDrawable.setAlpha(oldAlpha);
-                    }
+                    // Tele iOS: no three-dot menu overlay on video thumbnails (removed by design)
                 }
 
                 boolean playing = MediaController.getInstance().isPlayingMessage(currentMessageObject);

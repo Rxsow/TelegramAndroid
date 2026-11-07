@@ -174,6 +174,7 @@ public class ForkSettingsActivity extends BaseFragment {
     public static final int ID_QUICK_ATTACH = 103;
     public static final int ID_NOTIFICATION_ICON = 110;
     public static final int ID_BUBBLE_PREVIEW = 111;
+    public static final int ID_QUICK_SAVE_BOOKMARK = 112;
 
     public static final int ID_EXPORT_SETTINGS = 95;
     public static final int ID_IMPORT_SETTINGS = 96;
@@ -232,9 +233,13 @@ public class ForkSettingsActivity extends BaseFragment {
                 int width = getMeasuredWidth();
                 int height = getMeasuredHeight();
 
-                // incoming bubble (left)
+                // incoming bubble (left) – hugs its text like a real message bubble
                 float inHeight = AndroidUtilities.dp(44);
-                float inWidth = Math.min(AndroidUtilities.dp(160), width * 0.46f);
+                float inTextWidth = Math.max(
+                    textPaint.measureText("Hello!"),
+                    timePaint.measureText("12:30")
+                ) + AndroidUtilities.dp(28);
+                float inWidth = Math.max(AndroidUtilities.dp(88), Math.min(Math.min(AndroidUtilities.dp(160), width * 0.46f), inTextWidth));
                 float inTop = height / 2f - inHeight - AndroidUtilities.dp(5);
                 rect.set(AndroidUtilities.dp(14), inTop, AndroidUtilities.dp(14) + inWidth, inTop + inHeight);
                 bubblePaint.setColor(getThemedColor(Theme.key_chat_inBubble));
@@ -244,17 +249,21 @@ public class ForkSettingsActivity extends BaseFragment {
                 timePaint.setColor(getThemedColor(Theme.key_chat_inTimeText));
                 canvas.drawText("12:30", rect.left + AndroidUtilities.dp(14), inTop + AndroidUtilities.dp(35), timePaint);
 
-                // outgoing bubble (right)
+                // outgoing bubble (right) – hugs its text so the sample never overflows
                 float outHeight = AndroidUtilities.dp(44);
-                float outWidth = Math.min(AndroidUtilities.dp(180), width * 0.54f);
+                float outTextWidth = Math.max(
+                    textPaint.measureText("Hi there!"),
+                    timePaint.measureText("12:31")
+                ) + AndroidUtilities.dp(28);
+                float outWidth = Math.max(AndroidUtilities.dp(96), Math.min(Math.min(AndroidUtilities.dp(180), width * 0.54f), outTextWidth));
                 float outTop = height / 2f + AndroidUtilities.dp(5);
                 rect.set(width - AndroidUtilities.dp(14) - outWidth, outTop, width - AndroidUtilities.dp(14), outTop + outHeight);
                 bubblePaint.setColor(getThemedColor(Theme.key_chat_outBubble));
                 canvas.drawRoundRect(rect, AndroidUtilities.dp(17), AndroidUtilities.dp(17), bubblePaint);
                 textPaint.setColor(getThemedColor(Theme.key_chat_messageTextOut));
-                canvas.drawText("Hi there!", rect.right - AndroidUtilities.dp(40), outTop + AndroidUtilities.dp(20), textPaint);
+                canvas.drawText("Hi there!", rect.left + AndroidUtilities.dp(14), outTop + AndroidUtilities.dp(20), textPaint);
                 timePaint.setColor(getThemedColor(Theme.key_chat_outTimeText));
-                canvas.drawText("12:31", rect.right - AndroidUtilities.dp(40), outTop + AndroidUtilities.dp(35), timePaint);
+                canvas.drawText("12:31", rect.left + AndroidUtilities.dp(14), outTop + AndroidUtilities.dp(35), timePaint);
             }
         }
 
@@ -769,6 +778,11 @@ public class ForkSettingsActivity extends BaseFragment {
             reportSectionError("notification icon section", e);
         }
 
+        // Tele iOS: glass bookmark button above the forward button
+        items.add(UItem.asButtonCheck(ID_QUICK_SAVE_BOOKMARK, LocaleController.getString(R.string.TeleIOSQuickSaveBookmark), LocaleController.getString(R.string.TeleIOSQuickSaveBookmarkInfo))
+            .setChecked(pref("iosQuickSaveBookmark", true)).setMultiline(true));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSQuickSaveBookmarkHint)));
+
         items.add(UItem.asHeader(LocaleController.getString(R.string.AvatarShape)));
         items.add(searchable(UItem.asSlideView(
             new String[]{
@@ -1019,6 +1033,8 @@ public class ForkSettingsActivity extends BaseFragment {
             } catch (Exception e) {
                 FileLog.e("ForkSettingsActivity: notification icon dialog failed", e);
             }
+        } else if (id == ID_QUICK_SAVE_BOOKMARK) {
+            toggle("iosQuickSaveBookmark", item, view);
 
         } else if (id == ID_SYNC_PINS) {
             toggle("syncPins", item, view);

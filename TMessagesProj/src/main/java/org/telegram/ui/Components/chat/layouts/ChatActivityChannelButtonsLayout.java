@@ -365,8 +365,10 @@ public class ChatActivityChannelButtonsLayout extends FrameLayout implements Fac
             if (left > right) {
                 left = right = (left + right) / 2f;
             }
-            totalWidthLeft = lerp(totalWidthLeft, left - dp(3.33f), wrapping);
-            totalWidthRight = lerp(totalWidthRight, getMeasuredWidth() - right - dp(17.66f), wrapping);
+            // Tele iOS: symmetric pill margins so the wrapped content (mute text,
+            // start button) sits exactly centered inside the glass capsule
+            totalWidthLeft = lerp(totalWidthLeft, left - dp(8), wrapping);
+            totalWidthRight = lerp(totalWidthRight, getMeasuredWidth() - right - dp(8), wrapping);
         }
 
         if (onButtonsTotalWidthChanged != null) {

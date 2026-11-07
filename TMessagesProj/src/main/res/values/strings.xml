@@ -87,6 +87,10 @@
     <string name="TeleIOSIncomingBubble">Incoming bubble</string>
     <string name="TeleIOSBubbleDefault">Default</string>
     <string name="TeleIOSBubbleColorsInfo">Pick a color for the incoming and outgoing message bubbles. The preview updates live; open any chat to see it applied.</string>
+    <string name="TeleIOSQuickSaveBookmark">Quick save bookmark</string>
+    <string name="TeleIOSQuickSaveBookmarkInfo">Show a glass bookmark button above the forward button on channel posts to send them to Saved Messages with one tap.</string>
+    <string name="TeleIOSQuickSaveBookmarkHint">The bookmark button appears on the right side of posts, above the forward arrow.</string>
+    <string name="TeleIOSSavedToMessages">Forwarded to Saved Messages</string>
     <string name="ForkCheckUpdate">Check updates</string>
     <string name="InAppCamera">Enable In-App Camera</string>
     <string name="InAppCameraInfo">In Attachments</string>

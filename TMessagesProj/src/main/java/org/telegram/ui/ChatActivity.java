@@ -8999,7 +8999,9 @@ public class ChatActivity extends BaseFragment implements
                 return themeDelegate;
             }
         };
-        bottomChannelButtonsLayout.getContainer().addView(bottomOverlayChatText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, 0));
+        bottomChannelButtonsLayout.getContainer().addView(bottomOverlayChatText, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 38, Gravity.CENTER, 24, 0, 24, 0));
+        // Tele iOS: compact centered mute capsule – the glass pill wraps this view
+        bottomChannelButtonsLayout.makeViewWrapContent(bottomOverlayChatText);
         bottomOverlayChatText.setOnClickListener(view -> {
             if (getParentActivity() == null || pullingDownOffset != 0) {
                 return;
@@ -40748,6 +40750,27 @@ public class ChatActivity extends BaseFragment implements
             );
 
             return bulletin.allowBlur().show(bulletin.getLayout() instanceof Bulletin.LottieLayoutWithReactions);
+        }
+
+        // Tele iOS: glass bookmark button – quick forward to Saved Messages
+        @Override
+        public void didPressBookmarkButton(ChatMessageCell cell) {
+            if (getParentActivity() == null) {
+                return;
+            }
+            MessageObject messageObject = cell.getMessageObject();
+            if (messageObject == null || messageObject.isSponsored() || getMessagesController().isFrozen()) {
+                if (getMessagesController().isFrozen()) {
+                    AccountFrozenAlert.show(currentAccount);
+                }
+                return;
+            }
+            ArrayList<MessageObject> messages = new ArrayList<>();
+            messages.add(messageObject);
+            getSendMessagesHelper().sendMessage(messages, UserConfig.getInstance(currentAccount).clientUserId, false, false, true, 0, 0);
+            BulletinFactory.of(ChatActivity.this)
+                .createSimpleBulletin(R.raw.done, LocaleController.getString(R.string.TeleIOSSavedToMessages))
+                .show();
         }
 
         @Override

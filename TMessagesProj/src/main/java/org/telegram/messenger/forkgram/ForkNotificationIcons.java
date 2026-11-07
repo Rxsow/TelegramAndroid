@@ -1,6 +1,7 @@
 package org.telegram.messenger.forkgram;
 
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 
@@ -42,11 +43,27 @@ public class ForkNotificationIcons {
         return ICONS[index];
     }
 
+    private static final String[] FALLBACK_NAMES = {
+        "Default", "Telegram", "Bell", "Shield", "Star", "Heart", "Chat"
+    };
+
     public static String nameAt(int index) {
         if (index < 0 || index >= NAMES.length) {
             return "";
         }
-        return ApplicationLoader.applicationContext.getString(NAMES[index]);
+        // Tele iOS: never let a missing resource crash the settings page –
+        // raw resources -> LocaleController asset lookup -> hardcoded fallback
+        try {
+            return ApplicationLoader.applicationContext.getString(NAMES[index]);
+        } catch (Throwable ignore) {
+            try {
+                String value = LocaleController.getString(NAMES[index]);
+                if (value != null && !value.startsWith("LOC_ERR")) {
+                    return value;
+                }
+            } catch (Throwable ignore2) {}
+            return index < FALLBACK_NAMES.length ? FALLBACK_NAMES[index] : "";
+        }
     }
 
     public static int getIndex() {
@@ -74,6 +91,8 @@ public class ForkNotificationIcons {
     }
 
     public static String currentName() {
-        return nameAt(getIndex());
+        int index = getIndex();
+        String name = nameAt(index);
+        return name;
     }
 }

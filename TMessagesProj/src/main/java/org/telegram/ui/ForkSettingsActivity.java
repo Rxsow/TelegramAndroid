@@ -1385,6 +1385,7 @@ public class ForkSettingsActivity extends BaseFragment {
         row.setGravity(Gravity.CENTER_VERTICAL);
         int selected = ForkNotificationIcons.getIndex();
         for (int i = 0; i < ForkNotificationIcons.count(); i++) {
+            final int index = i;
             LinearLayout item = new LinearLayout(context);
             item.setOrientation(LinearLayout.VERTICAL);
             item.setGravity(Gravity.CENTER);
@@ -1417,8 +1418,8 @@ public class ForkSettingsActivity extends BaseFragment {
             item.addView(iconHolder, LayoutHelper.createLinear(46, 46, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 5));
             item.addView(label, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
             item.setOnClickListener(v -> {
-                if (ForkNotificationIcons.getIndex() != i) {
-                    ForkNotificationIcons.setIndex(i);
+                if (ForkNotificationIcons.getIndex() != index) {
+                    ForkNotificationIcons.setIndex(index);
                 }
                 listView.adapter.update(false);
             });

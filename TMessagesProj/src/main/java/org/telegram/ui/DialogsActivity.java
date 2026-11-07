@@ -516,6 +516,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     public static boolean switchingTheme;
     private ActionBarMenuItem doneItem;
     private ProxyDrawable proxyDrawable;
+    private FrameLayout proxyShieldContainer;
     private ActionBarMenuSubItem proxyMenuSubItem;
     private HintView2 storyHint;
     private HintView2 storyPremiumHint;
@@ -3346,7 +3347,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         actionBar.setItemsColor(getThemedColor(Theme.key_actionBarDefaultIcon), false);
         actionBar.setItemsColor(getThemedColor(Theme.key_actionBarActionModeDefaultIcon), true);
         actionBar.createAdditionalSubTitleOverlayContainer();
-        actionBar.getAdditionalSubTitleOverlayContainer().setTranslationX(dp(4));
         actionBar.getAdditionalSubTitleOverlayContainer().setTranslationY(-dp(3));
 
         if (inPreviewMode || AndroidUtilities.isTablet() && folderId != 0 && !isArchive()) {
@@ -3642,38 +3642,61 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             menuCapsuleBg.setShape(GradientDrawable.RECTANGLE);
             menuCapsuleBg.setCornerRadius(dp(17));
             menuCapsuleBg.setColor(getThemedColor(Theme.key_graySection));
-            menuCapsuleBg.setStroke(dp(1), 0x26FFFFFF);
+            menuCapsuleBg.setStroke(dp(1), headerCapsuleStrokeColor());
             FrameLayout menuCapsule = new FrameLayout(getContext()) {
                 @Override
                 protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                     boolean menuIsNormal = menu.getMeasuredWidth() > 0 && menu.getMeasuredWidth() < dp(170) && !actionBar.isActionModeShowed();
-                    int capsuleWidth = menuIsNormal ? menu.getMeasuredWidth() + dp(16) : 0;
+                    int capsuleWidth = menuIsNormal ? menu.getMeasuredWidth() + dp(8) : 0;
+                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(34)) / 2, 0, 0);
                     super.onMeasure(View.MeasureSpec.makeMeasureSpec(capsuleWidth, View.MeasureSpec.EXACTLY), heightMeasureSpec);
                 }
             };
-            menuCapsule.setPadding(0, AndroidUtilities.statusBarHeight + dp(7), 0, dp(7));
             View menuCapsuleInner = new View(getContext());
             menuCapsuleInner.setBackground(menuCapsuleBg);
-            menuCapsule.addView(menuCapsuleInner, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-            actionBar.addView(menuCapsule, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.TOP, 0, 0, -8, 0));
+            menuCapsule.addView(menuCapsuleInner, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, dp(34)));
+            actionBar.addView(menuCapsule, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.TOP, 0, 0, dp(4), 0));
             menu.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or2, ob) -> menuCapsule.requestLayout());
             GradientDrawable editCapsuleBg = new GradientDrawable();
             editCapsuleBg.setShape(GradientDrawable.RECTANGLE);
-            editCapsuleBg.setCornerRadius(dp(16));
+            editCapsuleBg.setCornerRadius(dp(17));
             editCapsuleBg.setColor(getThemedColor(Theme.key_graySection));
-            editCapsuleBg.setStroke(dp(1), 0x26FFFFFF);
-            FrameLayout editContainer = new FrameLayout(getContext());
-            editContainer.setPadding(0, AndroidUtilities.statusBarHeight + dp(8), 0, dp(8));
+            editCapsuleBg.setStroke(dp(1), headerCapsuleStrokeColor());
+            FrameLayout editContainer = new FrameLayout(getContext()) {
+                @Override
+                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                    setPadding(dp(6), AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(34)) / 2, 0, 0);
+                    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                }
+            };
             TextView editButton = new TextView(getContext());
             editButton.setText(getString(R.string.Edit));
             editButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
             editButton.setTextColor(getThemedColor(Theme.key_actionBarDefaultIcon));
             editButton.setGravity(Gravity.CENTER);
             editButton.setBackground(editCapsuleBg);
-            editButton.setPadding(dp(18), 0, dp(18), 0);
+            editButton.setPadding(dp(14), 0, dp(14), 0);
             editButton.setOnClickListener(v -> presentFragment(new FiltersSetupActivity()));
-            editContainer.addView(editButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT));
+            editContainer.addView(editButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, dp(34), Gravity.LEFT));
             actionBar.addView(editContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
+
+            // iOS style: centered shield badge, fades in when the proxy is connected
+            proxyShieldContainer = new FrameLayout(getContext()) {
+                @Override
+                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(24)) / 2, 0, 0);
+                    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                }
+            };
+            ImageView proxyShieldIcon = new ImageView(getContext());
+            proxyShieldIcon.setImageResource(R.drawable.outline_shield_plain_24);
+            proxyShieldIcon.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.SRC_IN));
+            proxyShieldIcon.setContentDescription(getString(R.string.ProxySettings));
+            proxyShieldIcon.setOnClickListener(v -> presentFragment(new ProxyListActivity()));
+            proxyShieldContainer.addView(proxyShieldIcon, LayoutHelper.createFrame(dp(24), dp(24), Gravity.CENTER_HORIZONTAL));
+            proxyShieldContainer.setVisibility(View.GONE);
+            proxyShieldContainer.setAlpha(0f);
+            actionBar.addView(proxyShieldContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         }
 
         searchItem.setSearchFieldHint(getString(R.string.Search));
@@ -10645,6 +10668,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         return undoView[0];
     }
 
+    private int headerCapsuleStrokeColor() {
+        int bg = getThemedColor(Theme.key_graySection);
+        double lum = (0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg)) / 255.0;
+        return lum > 0.6 ? 0x16000000 : 0x26FFFFFF;
+    }
+
     private void updateProxyButton(boolean animated, boolean force) {
         if (proxyDrawable == null || doneItem != null && doneItem.getVisibility() == View.VISIBLE) {
             return;
@@ -10668,6 +10697,25 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         final boolean connected = currentConnectionState == ConnectionsManager.ConnectionStateConnected || currentConnectionState == ConnectionsManager.ConnectionStateUpdating;
         proxyMenuSubItem.setSubtext(getString(proxyEnabled ? (connected ? R.string.MenuProxyConnected : R.string.MenuProxyConnecting) : R.string.MenuProxyDisabled));
         proxyDrawable.setConnected(proxyEnabled, connected, animated);
+
+        if (proxyShieldContainer != null) {
+            final boolean showShield = proxyEnabled && connected;
+            if (showShield) {
+                proxyShieldContainer.animate().cancel();
+                proxyShieldContainer.setVisibility(View.VISIBLE);
+                proxyShieldContainer.animate().alpha(1f).setDuration(220).setListener(null).start();
+            } else if (proxyShieldContainer.getVisibility() == View.VISIBLE) {
+                proxyShieldContainer.animate().cancel();
+                proxyShieldContainer.animate().alpha(0f).setDuration(180).setListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        if (proxyShieldContainer != null) {
+                            proxyShieldContainer.setVisibility(View.GONE);
+                        }
+                    }
+                }).start();
+            }
+        }
     }
 
     private AnimatorSet doneItemAnimator;

@@ -1580,7 +1580,8 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         }
         if (additionalSubTitleOverlayContainer != null) {
             int textTop = getCurrentActionBarHeight() / 2 + (getCurrentActionBarHeight() / 2 - additionalSubTitleOverlayContainer.getMeasuredHeight()) / 2 - dp(2);
-            additionalSubTitleOverlayContainer.layout(textLeft, additionalTop + textTop, textLeft + additionalSubTitleOverlayContainer.getMeasuredWidth(), additionalTop + textTop + additionalSubTitleOverlayContainer.getMeasuredHeight());
+            int centeredLeft = (getMeasuredWidth() - additionalSubTitleOverlayContainer.getMeasuredWidth()) / 2;
+            additionalSubTitleOverlayContainer.layout(centeredLeft, additionalTop + textTop, centeredLeft + additionalSubTitleOverlayContainer.getMeasuredWidth(), additionalTop + textTop + additionalSubTitleOverlayContainer.getMeasuredHeight());
         }
         if (subtitleTextView != null && subtitleTextView.getVisibility() != GONE) {
             int textTop = getCurrentActionBarHeight() / 2 + (getCurrentActionBarHeight() / 2 - subtitleTextView.getTextHeight()) / 2 - dp(2);
@@ -1704,7 +1705,10 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         if (additionalSubTitleOverlayContainer != null) {
             final CharSequence textToSet;
             if (titleId == R.string.ConnectingToProxyWithDots) {
-                textToSet = AndroidUtilities.replaceArrows(getString(R.string.TitleSetupProxy), true, dp(8f / 3f), dp(2));
+                // iOS style: small "Connecting to proxy..." under the centered "Proxy" title (dots animate)
+                textToSet = LocaleController.getString(R.string.ConnectingToProxyWithDots);
+            } else if (titleId == R.string.ConnectingToProxy) {
+                textToSet = LocaleController.getString(R.string.ConnectingToProxy);
             } else {
                 textToSet = null;
             }
@@ -1724,8 +1728,9 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 ellipsize = true;
             }
         }
-        if (titleId == R.string.ConnectingToProxy) {
-            textToSet = "...";
+        if (titleId == R.string.ConnectingToProxyWithDots || titleId == R.string.ConnectingToProxy) {
+            // iOS style: compact centered "Proxy" title while connecting; details go to the small subtitle
+            textToSet = LocaleController.getString(R.string.MenuProxyTitle);
         }
         titleOverlayShown = title != null;
         if ((textToSet != null && titleTextView[0] == null) || getMeasuredWidth() == 0 || (titleTextView[0] != null && titleTextView[0].getVisibility() != View.VISIBLE)) {

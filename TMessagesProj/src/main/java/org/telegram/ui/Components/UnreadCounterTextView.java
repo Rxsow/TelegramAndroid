@@ -166,6 +166,41 @@ public class UnreadCounterTextView extends View {
         }
     }
 
+    // Tele iOS: opt-in compact measuring – the wrapping glass capsule needs the
+    // view to hug its text instead of spanning the whole available width
+    private boolean compactWidth;
+
+    public void setCompactWidth(boolean value) {
+        if (compactWidth != value) {
+            compactWidth = value;
+            requestLayout();
+            invalidate();
+        }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int content = 0;
+        if (compactWidth && textLayout != null) {
+            content = layoutTextWidth;
+            if (icon != null) {
+                content += icon.getIntrinsicWidth() + AndroidUtilities.dp(6);
+            }
+            if (circleWidth != 0) {
+                content += circleWidth + AndroidUtilities.dp(12);
+            }
+        }
+        if (content <= 0) {
+            // legacy behavior (plain View measures to the full available width)
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
+        setMeasuredDimension(
+            resolveSize(content + getPaddingLeft() + getPaddingRight(), widthMeasureSpec),
+            resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec)
+        );
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         Layout layout = textLayout;

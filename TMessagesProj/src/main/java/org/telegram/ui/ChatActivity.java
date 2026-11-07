@@ -9001,6 +9001,8 @@ public class ChatActivity extends BaseFragment implements
         };
         bottomChannelButtonsLayout.getContainer().addView(bottomOverlayChatText, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 38, Gravity.CENTER, 24, 0, 24, 0));
         // Tele iOS: compact centered mute capsule – the glass pill wraps this view
+        bottomOverlayChatText.setCompactWidth(true);
+        bottomOverlayChatText.setPadding(dp(20), 0, dp(20), 0);
         bottomChannelButtonsLayout.makeViewWrapContent(bottomOverlayChatText);
         bottomOverlayChatText.setOnClickListener(view -> {
             if (getParentActivity() == null || pullingDownOffset != 0) {

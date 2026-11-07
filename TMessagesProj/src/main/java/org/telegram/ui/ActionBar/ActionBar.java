@@ -1715,6 +1715,10 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 textToSet = LocaleController.getString(R.string.ConnectingToProxyWithDots);
             } else if (titleId == R.string.ConnectingToProxy) {
                 textToSet = LocaleController.getString(R.string.ConnectingToProxy);
+            } else if (titleId == R.string.Connecting || titleId == R.string.Updating || titleId == R.string.WaitingForNetwork) {
+                // Tele iOS: all connection states share the same small centered
+                // status line – none of them may render as the big overlay title
+                textToSet = LocaleController.getString(titleId);
             } else {
                 textToSet = null;
             }
@@ -1734,9 +1738,10 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 ellipsize = true;
             }
         }
-        if (titleId == R.string.ConnectingToProxyWithDots || titleId == R.string.ConnectingToProxy) {
-            // iOS style: no big title while connecting – proxy access stays in the 3-dot menu;
-            // only the small centered subtitle is shown, replaced by the shield badge when connected
+        if (titleId == R.string.ConnectingToProxyWithDots || titleId == R.string.ConnectingToProxy
+            || titleId == R.string.Connecting || titleId == R.string.Updating || titleId == R.string.WaitingForNetwork) {
+            // iOS style: no big title for any connection state – only the small
+            // centered subtitle is shown, replaced by the shield badge when connected
             textToSet = "";
         }
         titleOverlayShown = title != null;
@@ -2411,8 +2416,10 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 }
             };
             additionalSubTitleOverlayContainer.setClipChildren(false);
-            // iOS style: half of the previous 14dp – a small status line, not a headline
-            additionalSubTitleOverlayContainer.setSubtitleTextSizeDp(7);
+            // Tele iOS: one uniform status size for every header state line
+            // ("Connecting…", "Updating…", "Connecting to proxy…") – matches the
+            // 15sp Edit capsule text, big enough to read, small enough for a status
+            additionalSubTitleOverlayContainer.setSubtitleTextSizeDp(15);
             addView(additionalSubTitleOverlayContainer);
         }
         return additionalSubTitleOverlayContainer;

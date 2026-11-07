@@ -354,19 +354,29 @@ public class ChatActivityChannelButtonsLayout extends FrameLayout implements Fac
 
         final float wrapping = animatorWrappingButton.getFloatValue();
         if (wrapping > 0 && getMeasuredWidth() > 0) {
+            // Tele iOS: the wrapped views live in the container's coordinate space
+            // (the container is inset by the side circles) while the glass and
+            // accent pills are drawn in OUR space – convert positions, skip
+            // invisible views and recenter the content on the full width so the
+            // compact capsule sits exactly at the bottom center of the screen
+            final int containerLeft = container.getLeft();
             float left = getMeasuredWidth(), right = 0;
             for (int i = 0; i < getContainer().getChildCount(); ++i) {
                 final View child = getContainer().getChildAt(i);
-                if (wrapContentButtons.contains(child)) {
-                    left  = Math.min(left, child.getLeft());
-                    right = Math.max(right, child.getRight());
+                if (!wrapContentButtons.contains(child) || child.getVisibility() != VISIBLE) {
+                    continue;
                 }
+                final float dx = ((getMeasuredWidth() - child.getWidth()) / 2f - (containerLeft + child.getLeft())) * wrapping;
+                child.setTranslationX(dx);
+                final float childLeft = containerLeft + child.getLeft() + dx;
+                left = Math.min(left, childLeft);
+                right = Math.max(right, childLeft + child.getWidth());
             }
             if (left > right) {
                 left = right = (left + right) / 2f;
             }
-            // Tele iOS: symmetric pill margins so the wrapped content (mute text,
-            // start button) sits exactly centered inside the glass capsule
+            // symmetric pill margins: the glass capsule hugs the wrapped content
+            // (mute text, start button) with equal gaps on both sides
             totalWidthLeft = lerp(totalWidthLeft, left - dp(8), wrapping);
             totalWidthRight = lerp(totalWidthRight, getMeasuredWidth() - right - dp(8), wrapping);
         }

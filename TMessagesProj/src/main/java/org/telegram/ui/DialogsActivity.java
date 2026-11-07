@@ -3685,7 +3685,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             proxyShieldContainer = new FrameLayout(getContext()) {
                 @Override
                 protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(16)) / 2, 0, 0);
+                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(18)) / 2, 0, 0);
                     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
                 }
             };
@@ -3694,8 +3694,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             proxyShieldIcon.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.SRC_IN));
             proxyShieldIcon.setContentDescription(getString(R.string.ProxySettings));
             proxyShieldIcon.setOnClickListener(v -> presentFragment(new ProxyListActivity()));
-            // small iOS-style badge: 16dp (was 24dp double-converted to ~48dp on screen)
-            proxyShieldContainer.addView(proxyShieldIcon, LayoutHelper.createFrame(16, 16, Gravity.CENTER_HORIZONTAL));
+            // Tele iOS: 18dp badge – same visual weight as the 15dp status line text
+            proxyShieldContainer.addView(proxyShieldIcon, LayoutHelper.createFrame(18, 18, Gravity.CENTER_HORIZONTAL));
             proxyShieldContainer.setVisibility(View.GONE);
             proxyShieldContainer.setAlpha(0f);
             actionBar.addView(proxyShieldContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));

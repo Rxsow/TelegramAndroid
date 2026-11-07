@@ -9060,31 +9060,85 @@ public class Theme {
 
     private static final boolean useIosChatColors = true;
 
+    // Tele iOS: user-picked bubble colors (0 = use the built-in iOS defaults)
+    public static volatile int iosCustomInBubbleColor = 0;
+    public static volatile int iosCustomOutBubbleColor = 0;
+    private static boolean iosCustomBubbleColorsLoaded;
+
+    private static void ensureIosCustomBubbleColors() {
+        if (iosCustomBubbleColorsLoaded) {
+            return;
+        }
+        iosCustomBubbleColorsLoaded = true;
+        try {
+            SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Context.MODE_PRIVATE);
+            iosCustomInBubbleColor = preferences.getInt("iosInBubbleColor", 0);
+            iosCustomOutBubbleColor = preferences.getInt("iosOutBubbleColor", 0);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
+    public static void reloadIosCustomBubbleColors() {
+        iosCustomBubbleColorsLoaded = false;
+    }
+
+    public static double iosBubbleLuma(int color) {
+        int r = (color >> 16) & 0xff, g = (color >> 8) & 0xff, b = color & 0xff;
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+    }
+
+    // darker variant used for the *_Selected bubble keys
+    public static int iosBubbleShift(int color, float factor) {
+        int a = color & 0xff000000;
+        int r = Math.min(255, (int) (((color >> 16) & 0xff) * factor));
+        int g = Math.min(255, (int) (((color >> 8) & 0xff) * factor));
+        int b = Math.min(255, (int) ((color & 0xff) * factor));
+        return a | (r << 16) | (g << 8) | b;
+    }
+
+    // text drawn on the outgoing bubble: keep the white set unless a light custom color needs black
+    private static int iosOnOutColor(int white) {
+        if (iosCustomOutBubbleColor != 0 && iosBubbleLuma(iosCustomOutBubbleColor) > 0.62) {
+            return (white & 0xff000000); // same alpha, black
+        }
+        return white;
+    }
+
+    private static boolean iosDarkInBubble() {
+        return iosCustomInBubbleColor != 0 && iosBubbleLuma(iosCustomInBubbleColor) < 0.45;
+    }
+
     private static int iosBubbleColor(int key, int color) {
         if (!useIosChatColors) {
             return color;
         }
+        ensureIosCustomBubbleColors();
         boolean dark = currentTheme != null && currentTheme.isDark();
         if (key == key_chat_inBubble) {
-            return dark ? 0xff26252a : 0xffe9e9eb;
+            return iosCustomInBubbleColor != 0 ? iosCustomInBubbleColor : (dark ? 0xff26252a : 0xffe9e9eb);
         } else if (key == key_chat_inBubbleSelected) {
-            return dark ? 0xff35343c : 0xffd5d5da;
+            return iosCustomInBubbleColor != 0 ? iosBubbleShift(iosCustomInBubbleColor, 0.85f) : (dark ? 0xff35343c : 0xffd5d5da);
         } else if (key == key_chat_outBubble) {
-            return dark ? 0xff0a84ff : 0xff007aff;
+            return iosCustomOutBubbleColor != 0 ? iosCustomOutBubbleColor : (dark ? 0xff0a84ff : 0xff007aff);
         } else if (key == key_chat_outBubbleSelected) {
-            return dark ? 0xff0060df : 0xff0062cc;
+            return iosCustomOutBubbleColor != 0 ? iosBubbleShift(iosCustomOutBubbleColor, 0.85f) : (dark ? 0xff0060df : 0xff0062cc);
         } else if (key == key_chat_outBubbleGradient1 || key == key_chat_outBubbleGradient2 || key == key_chat_outBubbleGradient3 || key == key_chat_outBubbleGradientAnimated) {
             return 0;
-        } else if (key == key_chat_messageTextOut || key == key_chat_outForwardedNameText || key == key_chat_outViaBotNameText || key == key_chat_outReplyNameText || key == key_chat_outReplyMessageText || key == key_chat_outReplyMediaMessageText || key == key_chat_outReplyMediaMessageSelectedText || key == key_chat_outSiteNameText || key == key_chat_outInstant || key == key_chat_outInstantSelected || key == key_chat_outPreviewInstantText || key == key_chat_messageLinkOut || key == key_chat_outAudioTitleText || key == key_chat_outFileNameText || key == key_chat_outContactNameText || key == key_chat_outAudioPerformerText || key == key_chat_outAudioPerformerSelectedText || key == key_chat_outMenu || key == key_chat_outMenuSelected || key == key_chat_outReplyLine || key == key_chat_outReplyLine2 || key == key_chat_outPreviewLine || key == key_chat_outAudioSeekbarFill || key == key_chat_outVoiceSeekbarFill || key == key_chat_outLoader || key == key_chat_outLoaderSelected || key == key_chat_outFileProgress || key == key_chat_outFileProgressSelected || key == key_chat_outMediaIcon || key == key_chat_outMediaIconSelected) {
+        } else if (iosDarkInBubble() && (key == key_chat_messageTextIn || key == key_chat_inForwardedNameText || key == key_chat_inViaBotNameText || key == key_chat_inReplyNameText || key == key_chat_inReplyMessageText || key == key_chat_inReplyMediaMessageText || key == key_chat_inReplyMediaMessageSelectedText || key == key_chat_inSiteNameText || key == key_chat_inInstant || key == key_chat_inInstantSelected || key == key_chat_inPreviewInstantText || key == key_chat_messageLinkIn || key == key_chat_inAudioTitleText || key == key_chat_inFileNameText || key == key_chat_inContactNameText || key == key_chat_inAudioPerformerText || key == key_chat_inAudioPerformerSelectedText || key == key_chat_inMenu || key == key_chat_inMenuSelected || key == key_chat_inReplyLine || key == key_chat_inPreviewLine || key == key_chat_inAudioSeekbarFill || key == key_chat_inVoiceSeekbarFill || key == key_chat_inLoader || key == key_chat_inLoaderSelected || key == key_chat_inFileProgress || key == key_chat_inFileProgressSelected || key == key_chat_inMediaIcon || key == key_chat_inMediaIconSelected)) {
             return 0xffffffff;
-        } else if (key == key_chat_outSentCheckRead || key == key_chat_outSentCheckReadSelected) {
-            return 0xffffffff;
-        } else if (key == key_chat_outSentCheck || key == key_chat_outSentCheckSelected || key == key_chat_outSentClock || key == key_chat_outSentClockSelected || key == key_chat_outViews || key == key_chat_outViewsSelected || key == key_chat_outAudioDurationText || key == key_chat_outAudioDurationSelectedText || key == key_chat_outContactPhoneText || key == key_chat_outContactPhoneSelectedText || key == key_chat_outFileInfoText || key == key_chat_outFileInfoSelectedText || key == key_chat_outVenueInfoText || key == key_chat_outVenueInfoSelectedText) {
+        } else if (iosDarkInBubble() && (key == key_chat_inTimeText || key == key_chat_inViews || key == key_chat_inAudioDurationText || key == key_chat_inContactPhoneText || key == key_chat_inVenueInfoText || key == key_chat_inFileInfoText)) {
             return 0xb3ffffff;
+        } else if (key == key_chat_messageTextOut || key == key_chat_outForwardedNameText || key == key_chat_outViaBotNameText || key == key_chat_outReplyNameText || key == key_chat_outReplyMessageText || key == key_chat_outReplyMediaMessageText || key == key_chat_outReplyMediaMessageSelectedText || key == key_chat_outSiteNameText || key == key_chat_outInstant || key == key_chat_outInstantSelected || key == key_chat_outPreviewInstantText || key == key_chat_messageLinkOut || key == key_chat_outAudioTitleText || key == key_chat_outFileNameText || key == key_chat_outContactNameText || key == key_chat_outAudioPerformerText || key == key_chat_outAudioPerformerSelectedText || key == key_chat_outMenu || key == key_chat_outMenuSelected || key == key_chat_outReplyLine || key == key_chat_outReplyLine2 || key == key_chat_outPreviewLine || key == key_chat_outAudioSeekbarFill || key == key_chat_outVoiceSeekbarFill || key == key_chat_outLoader || key == key_chat_outLoaderSelected || key == key_chat_outFileProgress || key == key_chat_outFileProgressSelected || key == key_chat_outMediaIcon || key == key_chat_outMediaIconSelected) {
+            return iosOnOutColor(0xffffffff);
+        } else if (key == key_chat_outSentCheckRead || key == key_chat_outSentCheckReadSelected) {
+            return iosOnOutColor(0xffffffff);
+        } else if (key == key_chat_outSentCheck || key == key_chat_outSentCheckSelected || key == key_chat_outSentClock || key == key_chat_outSentClockSelected || key == key_chat_outViews || key == key_chat_outViewsSelected || key == key_chat_outAudioDurationText || key == key_chat_outAudioDurationSelectedText || key == key_chat_outContactPhoneText || key == key_chat_outContactPhoneSelectedText || key == key_chat_outFileInfoText || key == key_chat_outFileInfoSelectedText || key == key_chat_outVenueInfoText || key == key_chat_outVenueInfoSelectedText) {
+            return iosOnOutColor(0xb3ffffff);
         } else if (key == key_chat_outTimeText || key == key_chat_outTimeSelectedText) {
-            return 0x99ffffff;
+            return iosOnOutColor(0x99ffffff);
         } else if (key == key_chat_outAudioProgress || key == key_chat_outAudioSelectedProgress || key == key_chat_outAudioSeekbar || key == key_chat_outAudioCacheSeekbar || key == key_chat_outAudioSeekbarSelected || key == key_chat_outVoiceSeekbar || key == key_chat_outVoiceSeekbarSelected) {
-            return 0x4dffffff;
+            return iosOnOutColor(0x4dffffff);
         } else if (key == key_chats_unreadCounter) {
             return dark ? 0xff0a84ff : 0xff007aff;
         } else if (key == key_chats_unreadCounterMuted) {

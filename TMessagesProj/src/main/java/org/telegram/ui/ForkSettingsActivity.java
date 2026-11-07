@@ -11,6 +11,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.RectF;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.text.TextPaint;
@@ -23,6 +27,8 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -43,6 +49,7 @@ import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.forkgram.ForkOfflineTranscribe;
 import org.telegram.messenger.forkgram.ForkOfflineTranslate;
 import org.telegram.messenger.forkgram.ForkSettingsLock;
+import org.telegram.messenger.forkgram.ForkNotificationIcons;
 import org.telegram.messenger.forkgram.HiddenAccountHelper;
 import org.telegram.messenger.forkgram.LinkReplacements;
 import org.telegram.messenger.forkgram.ModFont;
@@ -57,6 +64,8 @@ import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.BottomSheet;
+import org.telegram.ui.Components.ColorPicker;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.Cells.NotificationsCheckCell;
 import org.telegram.ui.Cells.RadioColorCell;
@@ -76,6 +85,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Locale;
 
 public class ForkSettingsActivity extends BaseFragment {
 
@@ -162,6 +172,8 @@ public class ForkSettingsActivity extends BaseFragment {
     public static final int ID_WEB_PUBLISH = 101;
     public static final int ID_VOICE_TIMECODES = 102;
     public static final int ID_QUICK_ATTACH = 103;
+    public static final int ID_NOTIFICATION_ICON = 110;
+    public static final int ID_BUBBLE_PREVIEW = 111;
 
     public static final int ID_EXPORT_SETTINGS = 95;
     public static final int ID_IMPORT_SETTINGS = 96;
@@ -188,6 +200,125 @@ public class ForkSettingsActivity extends BaseFragment {
     public boolean onFragmentCreate() {
         unlocked = !ForkSettingsLock.hasCode();
         return super.onFragmentCreate();
+    }
+
+    // Tele iOS: live preview + color pickers for incoming/outgoing message bubbles
+    private class BubbleColorsCell extends FrameLayout {
+        private final BubblePreviewView previewView;
+        private final View outSwatch;
+        private final View inSwatch;
+        private final TextView outValue;
+        private final TextView inValue;
+
+        private class BubblePreviewView extends View {
+            private final Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            private final TextPaint timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            private final RectF rect = new RectF();
+
+            public BubblePreviewView(Context context) {
+                super(context);
+                textPaint.setTextSize(AndroidUtilities.dp(14));
+                timePaint.setTextSize(AndroidUtilities.dp(10));
+            }
+
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(118), MeasureSpec.EXACTLY));
+            }
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                int width = getMeasuredWidth();
+                int height = getMeasuredHeight();
+
+                // incoming bubble (left)
+                float inHeight = AndroidUtilities.dp(44);
+                float inWidth = Math.min(AndroidUtilities.dp(160), width * 0.46f);
+                float inTop = height / 2f - inHeight - AndroidUtilities.dp(5);
+                rect.set(AndroidUtilities.dp(14), inTop, AndroidUtilities.dp(14) + inWidth, inTop + inHeight);
+                bubblePaint.setColor(getThemedColor(Theme.key_chat_inBubble));
+                canvas.drawRoundRect(rect, AndroidUtilities.dp(17), AndroidUtilities.dp(17), bubblePaint);
+                textPaint.setColor(getThemedColor(Theme.key_chat_messageTextIn));
+                canvas.drawText("Hello!", rect.left + AndroidUtilities.dp(14), inTop + AndroidUtilities.dp(20), textPaint);
+                timePaint.setColor(getThemedColor(Theme.key_chat_inTimeText));
+                canvas.drawText("12:30", rect.left + AndroidUtilities.dp(14), inTop + AndroidUtilities.dp(35), timePaint);
+
+                // outgoing bubble (right)
+                float outHeight = AndroidUtilities.dp(44);
+                float outWidth = Math.min(AndroidUtilities.dp(180), width * 0.54f);
+                float outTop = height / 2f + AndroidUtilities.dp(5);
+                rect.set(width - AndroidUtilities.dp(14) - outWidth, outTop, width - AndroidUtilities.dp(14), outTop + outHeight);
+                bubblePaint.setColor(getThemedColor(Theme.key_chat_outBubble));
+                canvas.drawRoundRect(rect, AndroidUtilities.dp(17), AndroidUtilities.dp(17), bubblePaint);
+                textPaint.setColor(getThemedColor(Theme.key_chat_messageTextOut));
+                canvas.drawText("Hi there!", rect.right - AndroidUtilities.dp(40), outTop + AndroidUtilities.dp(20), textPaint);
+                timePaint.setColor(getThemedColor(Theme.key_chat_outTimeText));
+                canvas.drawText("12:31", rect.right - AndroidUtilities.dp(40), outTop + AndroidUtilities.dp(35), timePaint);
+            }
+        }
+
+        public BubbleColorsCell(Context context) {
+            super(context);
+            LinearLayout container = new LinearLayout(context);
+            container.setOrientation(LinearLayout.VERTICAL);
+            container.setPadding(AndroidUtilities.dp(21), AndroidUtilities.dp(8), AndroidUtilities.dp(21), AndroidUtilities.dp(8));
+
+            previewView = new BubblePreviewView(context);
+            container.addView(previewView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+            outSwatch = new View(context);
+            inSwatch = new View(context);
+            outValue = new TextView(context);
+            inValue = new TextView(context);
+            container.addView(createSwatchRow(context, LocaleController.getString(R.string.TeleIOSOutgoingBubble), outSwatch, outValue, true), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44));
+            container.addView(createSwatchRow(context, LocaleController.getString(R.string.TeleIOSIncomingBubble), inSwatch, inValue, false), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44));
+            addView(container, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            refresh();
+        }
+
+        private LinearLayout createSwatchRow(Context context, String title, View swatch, TextView value, boolean outgoing) {
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, AndroidUtilities.dp(6), 0, AndroidUtilities.dp(6));
+
+            TextView titleView = new TextView(context);
+            titleView.setText(title);
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+            titleView.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
+
+            value.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            value.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteValueText));
+            value.setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT);
+
+            row.addView(swatch, LayoutHelper.createLinear(26, 26, 0, 0, 12, 0));
+            row.addView(titleView, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+            row.addView(value, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 0, 0, 10, 0));
+            row.setOnClickListener(v -> showBubbleColorPicker(outgoing));
+            return row;
+        }
+
+        public void refresh() {
+            boolean dark = Theme.isCurrentThemeDark();
+            int out = Theme.iosCustomOutBubbleColor;
+            int in = Theme.iosCustomInBubbleColor;
+            outSwatch.setBackground(swatchDrawable(out != 0 ? out : (dark ? 0xff0a84ff : 0xff007aff)));
+            inSwatch.setBackground(swatchDrawable(in != 0 ? in : (dark ? 0xff26252a : 0xffe9e9eb)));
+            outValue.setText(bubbleColorValue(out));
+            inValue.setText(bubbleColorValue(in));
+            if (previewView != null) {
+                previewView.invalidate();
+            }
+        }
+
+        private GradientDrawable swatchDrawable(int color) {
+            GradientDrawable drawable = new GradientDrawable();
+            drawable.setShape(GradientDrawable.OVAL);
+            drawable.setColor(color);
+            drawable.setStroke(AndroidUtilities.dp(1), 0x1f000000);
+            return drawable;
+        }
     }
 
     private class StickerSizeCell extends FrameLayout {
@@ -272,6 +403,8 @@ public class ForkSettingsActivity extends BaseFragment {
     }
 
     private StickerSizeCell stickerSizeCell;
+
+    private BubbleColorsCell bubbleColorsCell;
 
     private static SharedPreferences prefs() {
         return MessagesController.getGlobalMainSettings();
@@ -576,6 +709,15 @@ public class ForkSettingsActivity extends BaseFragment {
         items.add(UItem.asSettingsCell(ID_CUSTOM_FONT, ApplicationLoader.applicationContext.getString(R.string.CustomFontTitle), ModFont.currentStateText()));
         items.add(UItem.asShadow(null));
 
+        items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSBubbleSection)));
+        bubbleColorsCell = new BubbleColorsCell(getContext());
+        items.add(UItem.asCustom(ID_BUBBLE_PREVIEW, bubbleColorsCell));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSBubbleColorsInfo)));
+
+        items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSNotificationIcon)));
+        items.add(UItem.asSettingsCell(ID_NOTIFICATION_ICON, LocaleController.getString(R.string.TeleIOSNotificationIcon), ForkNotificationIcons.currentName()));
+        items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSNotificationIconInfo)));
+
         items.add(UItem.asHeader(LocaleController.getString(R.string.AvatarShape)));
         items.add(searchable(UItem.asSlideView(
             new String[]{
@@ -820,6 +962,8 @@ public class ForkSettingsActivity extends BaseFragment {
             showCustomTitleDialog(view);
         } else if (id == ID_CUSTOM_FONT) {
             showCustomFontDialog();
+        } else if (id == ID_NOTIFICATION_ICON) {
+            showNotificationIconDialog();
 
         } else if (id == ID_SYNC_PINS) {
             toggle("syncPins", item, view);
@@ -1226,6 +1370,133 @@ public class ForkSettingsActivity extends BaseFragment {
                 }
                 return null;
             });
+    }
+
+    private void showNotificationIconDialog() {
+        Context context = getContext();
+        LinearLayout container = new LinearLayout(context);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(4), AndroidUtilities.dp(12), AndroidUtilities.dp(4));
+
+        HorizontalScrollView scrollView = new HorizontalScrollView(context);
+        scrollView.setClipToPadding(false);
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        int selected = ForkNotificationIcons.getIndex();
+        for (int i = 0; i < ForkNotificationIcons.count(); i++) {
+            LinearLayout item = new LinearLayout(context);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER);
+
+            FrameLayout iconHolder = new FrameLayout(context);
+            GradientDrawable holderBg = new GradientDrawable();
+            holderBg.setShape(GradientDrawable.OVAL);
+            holderBg.setColor(getThemedColor(Theme.key_graySection));
+            if (i == selected) {
+                holderBg.setStroke(AndroidUtilities.dp(2), getThemedColor(Theme.key_chats_actionBackground));
+            }
+            iconHolder.setBackground(holderBg);
+            ImageView icon = new ImageView(context);
+            int res = ForkNotificationIcons.iconAt(i);
+            icon.setImageResource(res != 0 ? res : R.drawable.notification);
+            if (res == 0) {
+                // the stock icon is a white bitmap – tint it the same gray as the vector options
+                icon.setColorFilter(new PorterDuffColorFilter(0xff8e8e93, PorterDuff.Mode.SRC_IN));
+            }
+            iconHolder.addView(icon, LayoutHelper.createFrame(26, 26, Gravity.CENTER));
+            iconHolder.setPadding(AndroidUtilities.dp(10), AndroidUtilities.dp(10), AndroidUtilities.dp(10), AndroidUtilities.dp(10));
+
+            TextView label = new TextView(context);
+            label.setText(ForkNotificationIcons.nameAt(i));
+            label.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
+            label.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(1);
+
+            item.addView(iconHolder, LayoutHelper.createLinear(46, 46, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 5));
+            item.addView(label, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL));
+            item.setOnClickListener(v -> {
+                if (ForkNotificationIcons.getIndex() != i) {
+                    ForkNotificationIcons.setIndex(i);
+                }
+                listView.adapter.update(false);
+            });
+            row.addView(item, LayoutHelper.createLinear(72, LayoutHelper.WRAP_CONTENT));
+        }
+        scrollView.addView(row);
+        container.addView(scrollView);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(LocaleController.getString(R.string.TeleIOSNotificationIcon));
+        builder.setView(container);
+        builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
+        builder.show();
+    }
+
+    private static String bubbleColorValue(int color) {
+        if (color == 0) {
+            return LocaleController.getString(R.string.TeleIOSBubbleDefault);
+        }
+        return String.format(Locale.ENGLISH, "#%02X%02X%02X", (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff);
+    }
+
+    private void showBubbleColorPicker(boolean outgoing) {
+        Context context = getContext();
+        final BottomSheet[] dialogRef = new BottomSheet[1];
+        ColorPicker colorPicker = new ColorPicker(context, false, new ColorPicker.ColorPickerDelegate() {
+            @Override
+            public void setColor(int color, int num, boolean applyNow) {
+                applyBubbleColor(outgoing, color);
+            }
+        }) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(320), MeasureSpec.EXACTLY));
+            }
+        };
+        int current = outgoing ? Theme.iosCustomOutBubbleColor : Theme.iosCustomInBubbleColor;
+        int initial = current != 0 ? current : (outgoing ? 0xff007aff : 0xffe9e9eb);
+        colorPicker.setColor(initial, 0);
+        colorPicker.setType(-1, true, 1, 1, false, 0, false);
+
+        LinearLayout wrapper = new LinearLayout(context);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        TextView resetButton = new TextView(context);
+        resetButton.setText(LocaleController.getString(R.string.TeleIOSBubbleDefault));
+        resetButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        resetButton.setTextColor(getThemedColor(Theme.key_chats_actionBackground));
+        resetButton.setGravity(Gravity.CENTER);
+        resetButton.setOnClickListener(v -> {
+            applyBubbleColor(outgoing, 0);
+            if (dialogRef[0] != null) {
+                dialogRef[0].dismiss();
+            }
+        });
+        wrapper.addView(resetButton, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44));
+        wrapper.addView(colorPicker, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        BottomSheet sheet = new BottomSheet(context, false);
+        sheet.setCustomView(wrapper);
+        sheet.show();
+        dialogRef[0] = sheet;
+    }
+
+    private void applyBubbleColor(boolean outgoing, int color) {
+        int value = color == 0 ? 0 : (color | 0xff000000);
+        if (outgoing) {
+            Theme.iosCustomOutBubbleColor = value;
+        } else {
+            Theme.iosCustomInBubbleColor = value;
+        }
+        SharedPreferences.Editor editor = prefs().edit();
+        editor.putInt("iosOutBubbleColor", Theme.iosCustomOutBubbleColor);
+        editor.putInt("iosInBubbleColor", Theme.iosCustomInBubbleColor);
+        editor.commit();
+        if (bubbleColorsCell != null) {
+            bubbleColorsCell.refresh();
+        }
+        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didSetNewTheme, false, true);
     }
 
     private static String getWebSocketDomainText() {

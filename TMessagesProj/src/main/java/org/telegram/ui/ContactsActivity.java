@@ -22,11 +22,13 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -411,13 +413,28 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
             sortItem = menu.addItem(sort_button, sortByName ? R.drawable.msg_contacts_time : R.drawable.msg_contacts_name);
             sortItem.setContentDescription(getString(R.string.AccDescrContactSorting));
             sortItem.setVisibility(View.GONE);
+            // iOS style pills matching the dialogs screen: true 34dp capsules centered on
+            // the header line (proper gap to both the status bar and the search field),
+            // theme-adaptive background with hairline, fully rounded
+            GradientDrawable sortPillBg = new GradientDrawable();
+            sortPillBg.setShape(GradientDrawable.RECTANGLE);
+            sortPillBg.setCornerRadius(dp(17));
+            sortPillBg.setColor(getThemedColor(Theme.key_graySection));
+            sortPillBg.setStroke(dp(1), headerCapsuleStrokeColor());
+            FrameLayout sortContainer = new FrameLayout(getContext()) {
+                @Override
+                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                    setPadding(dp(58), AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(34)) / 2, 0, 0);
+                    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                }
+            };
             TextView sortPill = new TextView(getContext());
             sortPill.setText(getString(R.string.SortBy));
             sortPill.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
             sortPill.setTypeface(AndroidUtilities.bold());
-            sortPill.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
+            sortPill.setTextColor(getThemedColor(Theme.key_actionBarDefaultIcon));
             sortPill.setGravity(Gravity.CENTER);
-            sortPill.setBackground(Theme.createRoundRectDrawable(dp(17), getThemedColor(Theme.key_windowBackgroundWhite)));
+            sortPill.setBackground(sortPillBg);
             sortPill.setPadding(dp(14), 0, dp(14), 0);
             sortPill.setOnClickListener(v -> {
                 SharedConfig.toggleSortContactsByName();
@@ -427,16 +444,31 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
                 }
                 sortItem.setIcon(sortByName ? R.drawable.msg_contacts_time : R.drawable.msg_contacts_name);
             });
-            actionBar.addView(sortPill, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, dp(34), Gravity.BOTTOM | Gravity.LEFT, 58, 0, 0, 7));
+            sortContainer.addView(sortPill, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 34, Gravity.LEFT));
+            actionBar.addView(sortContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
+
+            GradientDrawable addPillBg = new GradientDrawable();
+            addPillBg.setShape(GradientDrawable.RECTANGLE);
+            addPillBg.setCornerRadius(dp(17));
+            addPillBg.setColor(getThemedColor(Theme.key_graySection));
+            addPillBg.setStroke(dp(1), headerCapsuleStrokeColor());
+            FrameLayout addContainer = new FrameLayout(getContext()) {
+                @Override
+                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                    setPadding(0, AndroidUtilities.statusBarHeight + (ActionBar.getCurrentActionBarHeight() - dp(34)) / 2, dp(10), 0);
+                    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                }
+            };
             TextView addPill = new TextView(getContext());
             addPill.setText("+");
             addPill.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
             addPill.setTypeface(AndroidUtilities.bold());
-            addPill.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
+            addPill.setTextColor(getThemedColor(Theme.key_actionBarDefaultIcon));
             addPill.setGravity(Gravity.CENTER);
-            addPill.setBackground(Theme.createRoundRectDrawable(dp(17), getThemedColor(Theme.key_windowBackgroundWhite)));
+            addPill.setBackground(addPillBg);
             addPill.setOnClickListener(v -> new NewContactBottomSheet(ContactsActivity.this, getContext()).show());
-            actionBar.addView(addPill, LayoutHelper.createFrame(dp(34), dp(34), Gravity.BOTTOM | Gravity.RIGHT, 0, 0, 10, 7));
+            addContainer.addView(addPill, LayoutHelper.createFrame(34, 34, Gravity.RIGHT));
+            actionBar.addView(addContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.TOP));
         }
 
         listView = new RecyclerListView(context);
@@ -1016,6 +1048,12 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
         }
         ViewCompat.setOnApplyWindowInsetsListener(fragmentView, this::onApplyWindowInsets);
         return fragmentView;
+    }
+
+    private int headerCapsuleStrokeColor() {
+        int bg = getThemedColor(Theme.key_graySection);
+        double lum = (0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg)) / 255.0;
+        return lum > 0.6 ? 0x16000000 : 0x26FFFFFF;
     }
 
     @Override

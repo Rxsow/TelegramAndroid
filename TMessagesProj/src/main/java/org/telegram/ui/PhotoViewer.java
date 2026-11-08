@@ -5891,36 +5891,14 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         menuItem.getPopupLayout().swipeBackGravityRight = true;
         menuItem.getPopupLayout().setFitItems(true);
 
-        chooseDownloadQualityLayout = new ChooseDownloadQualityLayout(activityContext, menuItem.getPopupLayout().getSwipeBack(), (messageObject, quality) -> {
-            if (quality == null) return;
-            TLRPC.Document document = quality.getDownloadDocument();
-            if (document == null) return;
-            File f = FileLoader.getInstance(currentAccount).getPathToAttach(document, null, false, true);
-            if (f == null || !f.exists()) {
-                f = FileLoader.getInstance(currentAccount).getPathToAttach(document, null, true, true);
-            }
-            if (f != null && f.exists()) {
-                MediaController.saveFile(f.toString(), parentActivity, 1, null, null, uri -> BulletinFactory.createSaveToGalleryBulletin(containerView, true, 0xf9222222, 0xffffffff).show());
-            } else {
-                ArrayList<MessageObject> messageObjects = new ArrayList<>();
-                messageObject.qualityToSave = document;
-                messageObjects.add(messageObject);
-                MediaController.saveFilesFromMessages(parentActivity, AccountInstance.getInstance(currentAccount), messageObjects, (count) -> {
-                    if (parentActivity == null || containerView == null) {
-                        return;
-                    }
-                    if (count > 0) {
-                        BulletinFactory.createSaveToGalleryBulletin(containerView, true, 0xf9222222, 0xffffffff).show();
-                    }
-                });
-            }
-            menuItem.toggleSubMenu();
-        });
+        chooseDownloadQualityLayout = new ChooseDownloadQualityLayout(activityContext, menuItem.getPopupLayout().getSwipeBack(), this::saveVideoQuality);
 
         galleryButton = menuItem.addSwipeBackItem(R.drawable.msg_gallery, null, getString(R.string.SaveToGallery), chooseDownloadQualityLayout.layout).setColors(0xfffafafa, 0xfffafafa);
         galleryButton.setOnClickListener(v -> {
-            if (currentMessageObject != null && currentMessageObject.hasVideoQualities() && chooseDownloadQualityLayout.update(currentMessageObject)) {
-                galleryButton.openSwipeBack();
+            // Tele iOS: saving always takes the best available quality
+            // (Original/Source first) – no quality list is shown
+            if (currentMessageObject != null && currentMessageObject.hasVideoQualities() && saveBestVideoQuality(currentMessageObject)) {
+                menuItem.toggleSubMenu();
                 return;
             }
             if (actionBar != null && actionBar.getActionBarMenuOnItemClick() != null) {
@@ -8596,8 +8574,72 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         }
     }
 
+    private void saveVideoQuality(MessageObject messageObject, VideoPlayer.Quality quality) {
+        if (messageObject == null || quality == null) return;
+        TLRPC.Document document = quality.getDownloadDocument();
+        if (document == null) return;
+        File f = FileLoader.getInstance(currentAccount).getPathToAttach(document, null, false, true);
+        if (f == null || !f.exists()) {
+            f = FileLoader.getInstance(currentAccount).getPathToAttach(document, null, true, true);
+        }
+        if (f != null && f.exists()) {
+            MediaController.saveFile(f.toString(), parentActivity, 1, null, null, uri -> BulletinFactory.createSaveToGalleryBulletin(containerView, true, 0xf9222222, 0xffffffff).show());
+        } else {
+            ArrayList<MessageObject> messageObjects = new ArrayList<>();
+            messageObject.qualityToSave = document;
+            messageObjects.add(messageObject);
+            MediaController.saveFilesFromMessages(parentActivity, AccountInstance.getInstance(currentAccount), messageObjects, (count) -> {
+                if (parentActivity == null || containerView == null) {
+                    return;
+                }
+                if (count > 0) {
+                    BulletinFactory.createSaveToGalleryBulletin(containerView, true, 0xf9222222, 0xffffffff).show();
+                }
+            });
+        }
+        menuItem.toggleSubMenu();
+    }
+
+    private boolean saveBestVideoQuality(MessageObject messageObject) {
+        try {
+            if (messageObject == null || messageObject.messageOwner == null || messageObject.messageOwner.media == null) {
+                return false;
+            }
+            ArrayList<VideoPlayer.Quality> qualities = VideoPlayer.getQualities(currentAccount, messageObject.messageOwner.media.document, messageObject.messageOwner.media.alt_documents, 0, false);
+            final VideoPlayer.Quality best = VideoPlayer.getBestQuality(qualities);
+            if (best == null || best.getDownloadDocument() == null) {
+                return false;
+            }
+            saveVideoQuality(messageObject, best);
+            return true;
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return false;
+    }
+
     private int lastQualityIndexSelected;
     private void updateQualityItems() {
+        // Tele iOS: the player has no quality menu, no quality label and no
+        // quality picker when saving – every video plays and saves its best
+        // available quality (Original/Source first) fully automatically.
+        // The speed slider stays visible exactly like on single-quality videos.
+        videoQualityLayout.setVisibility(View.GONE);
+        videoQualityItems.clear();
+        chooseSpeedLayout.setVisibility(View.VISIBLE);
+        galleryButton.setRightIcon(0);
+        if (videoItemIcon != null) {
+            videoItemIcon.bottomText.setText("", true);
+        }
+        lastQualityIndexSelected = -1;
+        if (videoPreviewFrame != null && currentMessageObject != null && videoPlayer != null) {
+            videoPreviewFrame.open(currentMessageObject, videoPlayer);
+        }
+    }
+
+    // Tele iOS: legacy quality-list builder, intentionally unused
+    @SuppressWarnings("unused")
+    private void updateQualityItemsLegacyUnused() {
         if (videoPlayer == null || videoPlayer.getQualitiesCount() <= 1) {
             videoQualityLayout.setVisibility(View.GONE);
             chooseSpeedLayout.setVisibility(View.VISIBLE);
@@ -9043,9 +9085,9 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         return insets.left;
     }
 
-	private int getRightInset() {
-		return insets.right;
-	}
+        private int getRightInset() {
+                return insets.right;
+        }
 
     private void dismissInternal() {
         if (activityVisibilityController != null) {

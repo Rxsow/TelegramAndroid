@@ -399,13 +399,19 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     public void preparePlayer(ArrayList<Quality> qualities, Quality select) {
         this.videoQualities = qualities;
-        this.videoQualityToSelect = select;
+        // Tele iOS: playback always uses the best available quality –
+        // Original/Source first, otherwise the highest resolution – chosen
+        // automatically with no menu and no manual selection, so any requested
+        // quality is intentionally ignored here
+        this.videoQualityToSelect = null;
         this.videoUri = null;
         this.videoType = "hls";
         this.audioUri = null;
         this.audioType = null;
         this.loopingMediaSource = false;
         this.autoIsOriginal = false;
+        this.forceAdaptiveHls = false;
+        this.triedAdaptiveHlsFallback = false;
 
         videoPlayerReady = false;
         mixedAudio = false;
@@ -414,8 +420,8 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         ensurePlayerCreated();
 
         currentStreamIsHls = false;
-        selectedQualityIndex = select == null || videoQualities == null ? QUALITY_AUTO : videoQualities.indexOf(select);
-        setSelectedQuality(true, select);
+        selectedQualityIndex = QUALITY_AUTO;
+        setSelectedQuality(true, null);
         if (autoIsOriginal) {
             selectedQualityIndex = QUALITY_AUTO;
         }
@@ -470,6 +476,10 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     public static final int QUALITY_AUTO = -1; // HLS
     private boolean autoIsOriginal = false;
+    // Tele iOS: set when the pinned best-quality source could not even start –
+    // the next prepare falls back to classic adaptive HLS once, instead of failing
+    private boolean forceAdaptiveHls = false;
+    private boolean triedAdaptiveHlsFallback = false;
     private int selectedQualityIndex = QUALITY_AUTO;
     private boolean currentStreamIsHls;
 
@@ -497,6 +507,29 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             }
         }
         return max;
+    }
+
+    // Tele iOS: the single "best quality" policy used everywhere –
+    // Original/Source first, otherwise the highest available resolution
+    public static Quality getBestQuality(ArrayList<Quality> qualities) {
+        if (qualities == null || qualities.isEmpty()) return null;
+        for (int i = 0; i < qualities.size(); ++i) {
+            final Quality q = qualities.get(i);
+            if (q != null && q.original && !q.uris.isEmpty()) return q;
+        }
+        Quality best = null;
+        for (int i = 0; i < qualities.size(); ++i) {
+            final Quality q = qualities.get(i);
+            if (q == null || q.uris.isEmpty()) continue;
+            if (best == null || (long) q.width * q.height > (long) best.width * best.height) {
+                best = q;
+            }
+        }
+        return best;
+    }
+
+    public Quality getBestQuality() {
+        return getBestQuality(videoQualities);
     }
 
     public int getHighestQualityIndex(Boolean original) {
@@ -720,32 +753,82 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
         videoQualityToSelect = quality;
         if (quality == null) { // AUTO
-            final Uri hlsManifest = makeManifest(videoQualities);
-            final Quality original = getOriginalQuality();
-            if (original != null && original.uris.size() == 1 && original.uris.get(0).isCached()) {
-                currentStreamIsHls = false;
-                autoIsOriginal = true;
-                quality = original;
-                videoQualityToSelect = quality;
-                player.setMediaSource(mediaSourceFromUri(quality.getDownloadUri(), "other"), false);
-                reset = true;
-            } else if (hlsManifest != null) {
-                autoIsOriginal = false;
-                trackSelector.setParameters(trackSelector.getParameters().buildUpon().clearOverrides().build());
-                if (!currentStreamIsHls) {
-                    currentStreamIsHls = true;
-                    player.setMediaSource(mediaSourceFromUri(hlsManifest, 0, "hls"), false);
-                    reset = true;
+            if (forceAdaptiveHls) {
+                // Tele iOS: the pinned best-quality source failed to start earlier
+                // – play the classic adaptive HLS manifest so the video still works
+                final Uri hlsManifest = makeManifest(videoQualities);
+                if (hlsManifest != null) {
+                    autoIsOriginal = false;
+                    trackSelector.setParameters(trackSelector.getParameters().buildUpon().clearOverrides().build());
+                    if (!currentStreamIsHls) {
+                        currentStreamIsHls = true;
+                        player.setMediaSource(mediaSourceFromUri(hlsManifest, 0, "hls"), false);
+                        reset = true;
+                    }
+                }
+                if (reset) {
+                    player.prepare();
+                    if (!start) {
+                        player.seekTo(lastPosition);
+                        if (lastPlaying) {
+                            player.play();
+                        }
+                    }
+                    if (onQualityChangeListener != null) {
+                        AndroidUtilities.runOnUIThread(onQualityChangeListener);
+                    }
+                    activePlayers.add(playerId);
+                }
+                return;
+            }
+            // Tele iOS: always the best quality – Original/Source first, otherwise
+            // the highest available resolution. The chosen version is pinned so
+            // adaptive streaming can never silently downgrade it on a slow
+            // connection, and only that single version is ever downloaded.
+            Quality target = getOriginalQuality();
+            if (target == null) {
+                target = getHighestQuality(false);
+            }
+            if (target == null || target.uris.isEmpty()) {
+                // no directly playable version at all – last resort: adaptive HLS
+                final Uri hlsManifest = makeManifest(videoQualities);
+                if (hlsManifest != null) {
+                    autoIsOriginal = false;
+                    trackSelector.setParameters(trackSelector.getParameters().buildUpon().clearOverrides().build());
+                    if (!currentStreamIsHls) {
+                        currentStreamIsHls = true;
+                        player.setMediaSource(mediaSourceFromUri(hlsManifest, 0, "hls"), false);
+                        reset = true;
+                    }
                 }
             } else {
-                quality = getHighestQuality(true);
-                if (quality == null) quality = getHighestQuality(false);
-                if (quality == null || quality.uris.isEmpty()) return;
-                currentStreamIsHls = false;
-                videoQualityToSelect = quality;
-                autoIsOriginal = quality.original;
-                player.setMediaSource(mediaSourceFromUri(quality.getDownloadUri(), "other"), false);
-                reset = true;
+                autoIsOriginal = target.original;
+                videoQualityToSelect = target;
+                final VideoUri chosen = target.getDownloadUri();
+                if (chosen == null || chosen.uri == null) {
+                    return;
+                }
+                if (chosen.isCached()) {
+                    currentStreamIsHls = false;
+                    player.setMediaSource(mediaSourceFromUri(chosen.uri, "other"), false);
+                    reset = true;
+                } else {
+                    Uri singleRendition = null;
+                    if (chosen.m3u8uri != null) {
+                        // HLS transport kept for a fast start, but the manifest
+                        // contains ONLY the chosen rendition – zero downgrades
+                        singleRendition = makeManifest(new ArrayList<>(Collections.singletonList(target)));
+                    }
+                    if (singleRendition != null) {
+                        currentStreamIsHls = true;
+                        player.setMediaSource(mediaSourceFromUri(singleRendition, 0, "hls"), false);
+                    } else {
+                        // plain progressive stream of the chosen version only
+                        currentStreamIsHls = false;
+                        player.setMediaSource(mediaSourceFromUri(chosen.uri, "other"), false);
+                    }
+                    reset = true;
+                }
             }
         } else {
             autoIsOriginal = false;
@@ -1830,6 +1913,15 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                     }
                 }
             } else {
+                // Tele iOS: if the pinned best-quality source could not even start
+                // (never became ready), fall back to classic adaptive HLS once so
+                // the user still gets a working playback instead of an error
+                if (videoQualities != null && !videoPlayerReady && !triedAdaptiveHlsFallback && !currentStreamIsHls) {
+                    triedAdaptiveHlsFallback = true;
+                    forceAdaptiveHls = true;
+                    setSelectedQuality(true, null);
+                    return;
+                }
                 delegate.onError(this, error);
             }
         });

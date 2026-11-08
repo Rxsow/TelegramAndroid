@@ -74,6 +74,18 @@ public class ChatInputViewsContainer extends FrameLayout {
 
 
     public boolean drawInputBackground = true;
+
+    // Tele iOS: while the channel mute/join capsule is shown there is no input
+    // field, so the input bubble glass must not draw at all – otherwise it peeks
+    // out around the capsule and clips its text
+    private boolean inputBubbleHidden;
+
+    public void setInputBubbleHidden(boolean hidden) {
+        if (inputBubbleHidden != hidden) {
+            inputBubbleHidden = hidden;
+            invalidate();
+        }
+    }
     public BlurredBackgroundDrawable blurredBackgroundDrawable;
     private BlurredBackgroundDrawable underKeyboardBackgroundDrawable;
     public void setInputIslandBubbleDrawable(BlurredBackgroundDrawable drawable) {
@@ -270,7 +282,7 @@ public class ChatInputViewsContainer extends FrameLayout {
         tmpRect.offset(0, blurTop + (int) bubbleInputTranlationY);
 
         blurredBackgroundDrawable.setBounds(tmpRect);
-        if (drawInputBackground)
+        if (drawInputBackground && !inputBubbleHidden)
             blurredBackgroundDrawable.draw(canvas);
 
         if (needDrawInAppKeyboard) {

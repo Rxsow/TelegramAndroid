@@ -71,6 +71,13 @@ public class UnreadCounterTextView extends View {
         setContentDescription(text);
         invalidate();
 
+        // Tele iOS: compact capsule must re-measure whenever its text changes,
+        // otherwise the pill keeps the width of the previous string and the
+        // new text sticks out of it
+        if (compactWidth) {
+            requestLayout();
+        }
+
         if (textLayoutOut != null || iconOut != null) {
             if (replaceAnimator != null) {
                 replaceAnimator.cancel();
@@ -93,6 +100,9 @@ public class UnreadCounterTextView extends View {
         textLayout = new StaticLayout(text, layoutPaint, layoutTextWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, true);
         setContentDescription(text);
         invalidate();
+        if (compactWidth) {
+            requestLayout();
+        }
     }
 
     public void setTextInfo(CharSequence text) {
@@ -102,6 +112,9 @@ public class UnreadCounterTextView extends View {
         textLayout = new StaticLayout(text, layoutPaint, layoutTextWidth + 1, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, true);
         setContentDescription(text);
         invalidate();
+        if (compactWidth) {
+            requestLayout();
+        }
     }
 
     public void setTextInfo(Drawable icon, CharSequence text) {
@@ -111,6 +124,9 @@ public class UnreadCounterTextView extends View {
         textLayout = new StaticLayout(text, layoutPaint, layoutTextWidth + 1, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, true);
         setContentDescription(text);
         invalidate();
+        if (compactWidth) {
+            requestLayout();
+        }
     }
 
     @Override

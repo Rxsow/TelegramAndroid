@@ -8925,12 +8925,21 @@ public class ChatActivity extends BaseFragment implements
             }
         });
         bottomChannelButtonsLayout.setOnButtonsTotalWidthChanged((l, r) -> {
-            // iOS style: the input island always leaves room for the attach button
-            // on the left and for the mic circle on the right
-            chatInputViewsContainer.setInputBubbleOffsets(Math.max(l, dp(64)), r + dp(48));
+            if (bottomChannelButtonsLayout.isWrappingContent()) {
+                // Tele iOS: while the mute/join capsule is shown there is no input
+                // field – the input bubble glass is hidden and the capsule uses its
+                // own glass, so nothing can clip the capsule text anymore
+                chatInputViewsContainer.setInputBubbleOffsets(l, r);
+                chatInputViewsContainer.setInputBubbleHidden(true);
+            } else {
+                // iOS style: the input island always leaves room for the attach button
+                // on the left and for the mic circle on the right
+                chatInputViewsContainer.setInputBubbleOffsets(Math.max(l, dp(64)), r + dp(48));
+                chatInputViewsContainer.setInputBubbleHidden(false);
+            }
         });
 
-        chatInputBubbleContainer.addView(bottomChannelButtonsLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 56, Gravity.BOTTOM, 0, 0, 0, (44 - 56) / 2));
+        chatInputBubbleContainer.addView(bottomChannelButtonsLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 56, Gravity.BOTTOM, 0, 0, 0, 0));
 
         bottomOverlayStartButton = new TextView(context) {
             CellFlickerDrawable cellFlickerDrawable;

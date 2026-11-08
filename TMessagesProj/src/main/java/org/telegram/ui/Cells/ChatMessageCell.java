@@ -4108,10 +4108,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 || hasGamePreview || hasInvoicePreview
             );
         }
-        // Tele iOS: the three-dot menu overlay was removed from video messages –
+        // Tele iOS: the three-dot menu overlay was removed from video, file and music messages –
         // disable its touch region too so the area passes gestures through
         if (allow && !hasGamePreview && !hasInvoicePreview &&
-            (documentAttachType == DOCUMENT_ATTACH_TYPE_VIDEO || (documentAttachType == DOCUMENT_ATTACH_TYPE_DOCUMENT && currentMessageObject.isVideo()))) {
+            (documentAttachType == DOCUMENT_ATTACH_TYPE_VIDEO || documentAttachType == DOCUMENT_ATTACH_TYPE_DOCUMENT || documentAttachType == DOCUMENT_ATTACH_TYPE_MUSIC)) {
             allow = false;
         }
         if (!allow) {
@@ -16478,6 +16478,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     private boolean shouldDrawMenuDrawable() {
+        // Tele iOS: no three-dot menu on file and music bubbles
+        if (documentAttachType == DOCUMENT_ATTACH_TYPE_DOCUMENT || documentAttachType == DOCUMENT_ATTACH_TYPE_MUSIC) {
+            return false;
+        }
         return (currentMessagesGroup == null || (currentPosition.flags & MessageObject.POSITION_FLAG_TOP) != 0) && !hasLinkPreview && (currentMessageObject == null || !currentMessageObject.isRepostPreview && !currentMessageObject.isSponsored());
     }
 

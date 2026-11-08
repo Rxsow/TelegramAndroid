@@ -810,7 +810,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 }
                 if (chosen.isCached()) {
                     currentStreamIsHls = false;
-                    player.setMediaSource(mediaSourceFromUri(chosen.uri, "other"), false);
+                    player.setMediaSource(mediaSourceFromUri(chosen, "other"), false);
                     reset = true;
                 } else {
                     Uri singleRendition = null;
@@ -825,7 +825,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                     } else {
                         // plain progressive stream of the chosen version only
                         currentStreamIsHls = false;
-                        player.setMediaSource(mediaSourceFromUri(chosen.uri, "other"), false);
+                        player.setMediaSource(mediaSourceFromUri(chosen, "other"), false);
                     }
                     reset = true;
                 }
@@ -1183,6 +1183,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
     }
 
     public Uri makeManifest(ArrayList<Quality> qualities) {
+        if (qualities == null || qualities.isEmpty()) return null;
         final StringBuilder sb = new StringBuilder();
         sb.append("#EXTM3U\n");
         sb.append("#EXT-X-VERSION:6\n");

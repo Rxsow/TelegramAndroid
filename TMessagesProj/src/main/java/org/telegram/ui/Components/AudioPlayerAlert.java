@@ -30,6 +30,7 @@ import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
@@ -698,14 +699,16 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
         timeTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         timeTextView.setText("0:00");
         timeTextView.setTextColor(uiSecondary);
+        timeTextView.setTextDirection(View.TEXT_DIRECTION_LTR);
         timeTextView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 
         durationTextView = new TextView(context);
         durationTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         durationTextView.setTextColor(uiSecondary);
         durationTextView.setGravity(Gravity.RIGHT);
+        durationTextView.setTextDirection(View.TEXT_DIRECTION_LTR);
         durationTextView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        durationTextView.setText("-0:00");
+        durationTextView.setText("0:00");
 
         playbackSpeedButton = new ActionBarMenuItem(context, null, 0, uiPrimary, false, resourcesProvider);
         playbackSpeedButton.setLongClickEnabled(false);
@@ -2335,10 +2338,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             if (lastTime != newTime) {
                 lastTime = newTime;
                 timeTextView.setText(AndroidUtilities.formatShortDuration(newTime));
-                final int fullDuration = (int) messageObject.getDuration();
-                if (fullDuration > 0) {
-                    durationTextView.setText("-" + AndroidUtilities.formatShortDuration(Math.max(0, fullDuration - newTime)));
-                }
             }
         }
     }
@@ -2436,7 +2435,8 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             int duration = lastDuration = (int) messageObject.getDuration();
 
             if (durationTextView != null) {
-                durationTextView.setText(duration != 0 ? "-" + AndroidUtilities.formatShortDuration(Math.max(0, duration - lastTime)) : "-:--");
+                // Tele iOS: right label shows the song's full duration (Apple Music style)
+                durationTextView.setText(duration > 0 ? AndroidUtilities.formatShortDuration(duration) : "-:--");
             }
 
             if (duration > 60 * 10) {
@@ -2853,10 +2853,6 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
 
         themeDescriptions.add(new ThemeDescription(durationTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_player_time));
         themeDescriptions.add(new ThemeDescription(timeTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_player_time));
-        themeDescriptions.add(new ThemeDescription(titleTextView.getTextView(), ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_player_actionBarTitle));
-        themeDescriptions.add(new ThemeDescription(titleTextView.getNextTextView(), ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_player_actionBarTitle));
-        themeDescriptions.add(new ThemeDescription(authorTextView.getTextView(), ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_player_time));
-        themeDescriptions.add(new ThemeDescription(authorTextView.getNextTextView(), ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_player_time));
 
         themeDescriptions.add(new ThemeDescription(containerView, 0, null, null, null, null, Theme.key_sheet_scrollUp));
 
@@ -3360,6 +3356,8 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
     private static abstract class CoverContainer extends FrameLayout {
 
         private final BackupImageView[] imageViews = new BackupImageView[2];
+        private final RectF clipRect = new RectF();
+        private final Path clipPath = new Path();
 
         private int activeIndex;
         private AnimatorSet animatorSet;
@@ -3374,6 +3372,7 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             });
             setClipToOutline(true);
             setElevation(dp(12));
+            final int cornerRadius = dp(14);
             for (int i = 0; i < 2; i++) {
                 imageViews[i] = new BackupImageView(context);
                 final int index = i;
@@ -3382,12 +3381,34 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
                         onImageUpdated(imageReceiver);
                     }
                 });
-                imageViews[i].setRoundRadius(dp(14));
+                imageViews[i].setRoundRadius(cornerRadius);
+                // Tele iOS: clip every cover image view to a rounded outline itself,
+                // so the artwork always has rounded corners no matter how the
+                // image receiver draws the bitmap
+                imageViews[i].setOutlineProvider(new ViewOutlineProvider() {
+                    @Override
+                    public void getOutline(View view, Outline outline) {
+                        outline.setRoundRect(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight(), cornerRadius);
+                    }
+                });
+                imageViews[i].setClipToOutline(true);
                 if (i == 1) {
                     imageViews[i].setVisibility(GONE);
                 }
                 addView(imageViews[i], LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
             }
+        }
+
+        @Override
+        protected void dispatchDraw(Canvas canvas) {
+            // Tele iOS: hard guarantee for rounded artwork corners
+            clipRect.set(0, 0, getWidth(), getHeight());
+            clipPath.reset();
+            clipPath.addRoundRect(clipRect, dp(14), dp(14), Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(clipPath);
+            super.dispatchDraw(canvas);
+            canvas.restore();
         }
 
         public final void switchImageViews() {
@@ -3861,15 +3882,20 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
     }
 
     private void applyUiColors() {
-        if (uiDarkText) {
-            uiPrimary = 0xFF202024;
-            uiSecondary = 0x99202024;
-        } else {
-            uiPrimary = 0xFFFFFFFF;
-            uiSecondary = 0x99FFFFFF;
-        }
+        // Tele iOS: the player floats on the dynamic artwork background, so every
+        // text and icon stays white for a consistent Apple Music look
+        uiPrimary = 0xFFFFFFFF;
+        uiSecondary = 0x99FFFFFF;
         if (topLabelTextView != null) {
             topLabelTextView.setTextColor(uiPrimary);
+        }
+        if (titleTextView != null) {
+            titleTextView.getTextView().setTextColor(uiPrimary);
+            titleTextView.getNextTextView().setTextColor(uiPrimary);
+        }
+        if (authorTextView != null) {
+            authorTextView.getTextView().setTextColor(uiSecondary);
+            authorTextView.getNextTextView().setTextColor(uiSecondary);
         }
         if (timeTextView != null) {
             timeTextView.setTextColor(uiSecondary);
@@ -3923,8 +3949,8 @@ public class AudioPlayerAlert extends BottomSheet implements NotificationCenter.
             seekBarView.setColors(uiPrimary, uiSecondary);
         }
         if (progressView != null) {
-            progressView.setBackgroundColor(uiDarkText ? 0x33202024 : 0x33FFFFFF);
-            progressView.setProgressColor(uiDarkText ? 0xCC202024 : 0xFFFFFFFF);
+            progressView.setBackgroundColor(0x33FFFFFF);
+            progressView.setProgressColor(0xFFFFFFFF);
         }
         if (actionBar != null) {
             actionBar.setItemsColor(uiPrimary, false);

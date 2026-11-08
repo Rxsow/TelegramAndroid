@@ -63,6 +63,8 @@ import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.FileLoader;
+import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.LocationController;
 import org.telegram.messenger.MediaController;
@@ -73,6 +75,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.audioinfo.AudioInfo;
 import org.telegram.messenger.voip.GroupCallMessage;
 import org.telegram.messenger.voip.GroupCallMessagesController;
 import org.telegram.messenger.voip.VoIPService;
@@ -129,6 +132,13 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
     private final CapsuleBlobDrawable capsuleBlobDrawable = new CapsuleBlobDrawable();
     private ImageView playButton;
     private PlayPauseDrawable playPauseDrawable;
+
+    // Tele iOS – Apple Music style mini player
+    private BackupImageView miniCoverView;
+    private GradientDrawable miniPillBackground;
+    private Drawable miniCoverPlaceholder;
+    private int lastCoverDocId;
+
     private AudioPlayerAlert.ClippingTextViewSwitcher titleTextView;
     private AudioPlayerAlert.ClippingTextViewSwitcher subtitleTextView;
     private AnimatorSet animatorSet;
@@ -428,6 +438,12 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         importingImageView.setAnimation(R.raw.import_progress, 30, 30);
         importingImageView.setBackground(Theme.createCircleDrawable(dp(22), getThemedColor(Theme.key_inappPlayerPlayPause)));
         addView(importingImageView, LayoutHelper.createFrame(22, 22, Gravity.TOP | Gravity.LEFT, 7, 7, 0, 0));
+
+        // Tele iOS: small album art of the Apple Music style mini player
+        miniCoverView = new BackupImageView(context);
+        miniCoverView.setRoundRadius(dp(7));
+        miniCoverView.setVisibility(GONE);
+        addView(miniCoverView, LayoutHelper.createFrame(30, 30, Gravity.TOP | Gravity.LEFT, 9, 7, 0, 0));
 
         titleTextView = new AudioPlayerAlert.ClippingTextViewSwitcher(context) {
             @Override
@@ -1028,11 +1044,48 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         speedSlider.setSpeed(currentPlaybackSpeed, animated);
     }
 
+    // Tele iOS: load the small album art for the mini player
+    private void updateMiniCover(MessageObject messageObject, boolean animated) {
+        if (miniCoverView == null || messageObject == null) {
+            return;
+        }
+        final TLRPC.Document document = messageObject.getDocument();
+        final int docId = document != null ? (int) document.id : messageObject.getId();
+        miniCoverView.setVisibility(VISIBLE);
+        if (docId == lastCoverDocId && (miniCoverView.getImageReceiver().hasBitmapImage() || miniCoverView.getDrawable() != null)) {
+            return;
+        }
+        lastCoverDocId = docId;
+        AudioInfo audioInfo = MediaController.getInstance().getAudioInfo();
+        if (audioInfo != null && audioInfo.getCover() != null) {
+            miniCoverView.setImageBitmap(audioInfo.getCover());
+            return;
+        }
+        TLRPC.PhotoSize thumb = document != null ? FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 90) : null;
+        if (thumb != null) {
+            miniCoverView.setImage(ImageLocation.getForDocument(thumb, document), null, null, null, null, 0, 1, messageObject);
+        } else {
+            miniCoverView.setImageDrawable(getMiniCoverPlaceholder());
+        }
+    }
+
+    private Drawable getMiniCoverPlaceholder() {
+        if (miniCoverPlaceholder == null) {
+            GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[] {0xFF575760, 0xFF37373F});
+            drawable.setCornerRadius(dp(7));
+            miniCoverPlaceholder = drawable;
+        }
+        return miniCoverPlaceholder;
+    }
+
     public void updateColors() {
         float currentPlaybackSpeed = MediaController.getInstance().getPlaybackSpeed(isMusic);
         final int color = getThemedColor(!equals(currentPlaybackSpeed, 1.0f) ? Theme.key_featuredStickers_addButtonPressed : Theme.key_inappPlayerClose);
         if (speedIcon != null) {
             speedIcon.setColor(color);
+        }
+        if (miniPillBackground != null && currentStyle == STYLE_AUDIO_PLAYER) {
+            miniPillBackground.setColor(getThemedColor(Theme.key_inappPlayerBackground));
         }
         if (playbackSpeedButton != null) {
             playbackSpeedButton.setBackground(Theme.createSelectorDrawable(color & 0x19ffffff, 1, dp(14)));
@@ -1211,9 +1264,13 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
             avatars.setStyle(currentStyle);
             avatars.setLayoutParams(LayoutHelper.createFrame(108, getStyleHeight(), Gravity.LEFT | Gravity.TOP));
         }
-        frameLayout.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, getStyleHeight(), Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
+        final boolean pillStyle = style == STYLE_AUDIO_PLAYER;
+        frameLayout.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, getStyleHeight(), Gravity.TOP | Gravity.LEFT, pillStyle ? 6 : 0, 0, pillStyle ? 6 : 0, 0));
         if (topPadding > 0 && topPadding != AndroidUtilities.dp2(getStyleHeight())) {
             setTopPadding(AndroidUtilities.dp2(getStyleHeight()));
+        }
+        if (miniCoverView != null && style != STYLE_AUDIO_PLAYER) {
+            miniCoverView.setVisibility(GONE);
         }
         if (style == STYLE_LIVE_STORY) {
             selector.setBackground(Theme.getSelectorDrawable(false));
@@ -1300,10 +1357,29 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                 titleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 36, Gravity.LEFT | Gravity.TOP, 35 + 16, 0, (isSideMenued ? 64 : 0) + 36, 0));
                 closeButton.setVisibility(GONE);
             } else if (style == STYLE_AUDIO_PLAYER) {
-                playButton.setLayoutParams(LayoutHelper.createFrame(36, 36, Gravity.TOP | Gravity.LEFT, 3, 0, 0, 0));
-                titleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 36, Gravity.LEFT | Gravity.TOP, 37, 0, (isSideMenued ? 64 : 0) + 36, 0));
+                // Tele iOS: Apple Music style floating capsule with album art
+                selector.setBackground(null);
+                if (miniPillBackground == null) {
+                    miniPillBackground = new GradientDrawable();
+                    miniPillBackground.setCornerRadius(dp(14));
+                }
+                miniPillBackground.setColor(getThemedColor(Theme.key_inappPlayerBackground));
+                frameLayout.setBackground(miniPillBackground);
+                frameLayout.setTag(Theme.key_inappPlayerBackground);
+                if (miniCoverView != null) {
+                    miniCoverView.setVisibility(VISIBLE);
+                }
+                playButton.setLayoutParams(LayoutHelper.createFrame(36, 36, Gravity.TOP | Gravity.RIGHT, 0, 4, 40, 0));
+                closeButton.setLayoutParams(LayoutHelper.createFrame(36, 36, Gravity.TOP | Gravity.RIGHT, 0, 4, 2, 0));
+                if (silentButton != null) {
+                    silentButton.setLayoutParams(LayoutHelper.createFrame(36, 36, Gravity.TOP | Gravity.RIGHT, 0, 4, 78, 0));
+                }
+                titleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 18, Gravity.LEFT | Gravity.TOP, 48, 5, (isSideMenued ? 64 : 0) + 84, 0));
+                subtitleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 15, Gravity.LEFT | Gravity.TOP, 48, 24, (isSideMenued ? 64 : 0) + 84, 0));
+                subtitleTextView.setVisibility(VISIBLE);
                 createPlaybackSpeedButton();
                 if (playbackSpeedButton != null) {
+                    playbackSpeedButton.setLayoutParams(LayoutHelper.createFrame(36, 36, Gravity.TOP | Gravity.RIGHT, 0, 4, 78, 0));
                     playbackSpeedButton.setVisibility(VISIBLE);
                     playbackSpeedButton.setTag(1);
                 }
@@ -1638,7 +1714,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
     float micAmplitude;
 
     public int getStyleHeight() {
-        return currentStyle == STYLE_INACTIVE_GROUP_CALL ? 48 : 36;
+        return currentStyle == STYLE_INACTIVE_GROUP_CALL ? 48 : (currentStyle == STYLE_AUDIO_PLAYER ? 44 : 36);
     }
 
     public boolean isCallTypeVisible() {
@@ -1998,7 +2074,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                         playbackSpeedButton.setAlpha(1.0f);
                         playbackSpeedButton.setEnabled(true);
                     }
-                    titleTextView.setPadding(0, 0, dp(44) + joinButtonWidth, 0);
+                    titleTextView.setPadding(0, 0, dp(84) + joinButtonWidth, 0);
                     stringBuilder = new SpannableStringBuilder(String.format("%s %s", messageObject.getMusicAuthor(), messageObject.getMusicTitle()));
 
                     for (int i = 0; i < 2; i++) {
@@ -2016,17 +2092,23 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                         if (messageObject.getDuration() >= 10 * 60) {
                             playbackSpeedButton.setAlpha(1.0f);
                             playbackSpeedButton.setEnabled(true);
-                            titleTextView.setPadding(0, 0, dp(44) + joinButtonWidth, 0);
+                            titleTextView.setPadding(0, 0, 0, 0);
                             updatePlaybackButton(false);
                         } else {
                             playbackSpeedButton.setAlpha(0.0f);
                             playbackSpeedButton.setEnabled(false);
-                            titleTextView.setPadding(0, 0, joinButtonWidth, 0);
+                            titleTextView.setPadding(0, 0, 0, 0);
                         }
                     } else {
-                        titleTextView.setPadding(0, 0, joinButtonWidth, 0);
+                        titleTextView.setPadding(0, 0, 0, 0);
                     }
-                    stringBuilder = new SpannableStringBuilder(String.format("%s - %s", messageObject.getMusicAuthor(), messageObject.getMusicTitle()));
+                    // Tele iOS: Apple Music mini player – title on the first line, artist on the second
+                    titleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 18, Gravity.LEFT | Gravity.TOP, 48, 5, (isSideMenued ? 64 : 0) + 84, 0));
+                    subtitleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 15, Gravity.LEFT | Gravity.TOP, 48, 24, (isSideMenued ? 64 : 0) + 84, 0));
+                    subtitleTextView.setVisibility(VISIBLE);
+                    subtitleTextView.setText(messageObject.getMusicAuthor(), !create && wasVisible && isMusic);
+                    updateMiniCover(messageObject, !create && wasVisible && isMusic);
+                    stringBuilder = new SpannableStringBuilder(messageObject.getMusicTitle());
                     for (int i = 0; i < 2; i++) {
                         TextView textView = i == 0 ? titleTextView.getTextView() : titleTextView.getNextTextView();
                         if (textView == null) {
@@ -2035,9 +2117,18 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
                         textView.setEllipsize(TextUtils.TruncateAt.END);
                     }
                 }
-                TypefaceSpan span = new TypefaceSpan(AndroidUtilities.bold(), 0, getThemedColor(Theme.key_inappPlayerPerformer));
-                stringBuilder.setSpan(span, 0, messageObject.getMusicAuthor().length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
-                titleTextView.setText(stringBuilder, !create && wasVisible && isMusic);
+                if (isMusic) {
+                    titleTextView.setText(stringBuilder, !create && wasVisible && isMusic);
+                } else {
+                    TypefaceSpan span = new TypefaceSpan(AndroidUtilities.bold(), 0, getThemedColor(Theme.key_inappPlayerPerformer));
+                    stringBuilder.setSpan(span, 0, messageObject.getMusicAuthor().length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
+                    titleTextView.setText(stringBuilder, !create && wasVisible && isMusic);
+                    if (miniCoverView != null) {
+                        miniCoverView.setVisibility(GONE);
+                    }
+                    subtitleTextView.setVisibility(GONE);
+                    titleTextView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 36, Gravity.LEFT | Gravity.TOP, 12, 0, (isSideMenued ? 64 : 0) + 84, 0));
+                }
             }
         }
     }
@@ -2692,10 +2783,10 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         if (currentStyle == STYLE_AUDIO_PLAYER) {
             MessageObject playingMessageObject = MediaController.getInstance().getPlayingMessageObject();
             if (playingMessageObject != null) {
-                final float left = -dpf2(1);
-                final float right = getMeasuredWidth() + dpf2(1);
+                final float left = dp(10);
+                final float right = getMeasuredWidth() - dp(10);
                 final float p = lerp(left, right, playingMessageObject.audioProgress);
-                final float bottom = getMeasuredHeight();
+                final float bottom = getMeasuredHeight() - dp(3);
                 final float top = bottom - dpf2(2);
 
                 progressPaint.setColor(getThemedColor(Theme.key_telegram_color));

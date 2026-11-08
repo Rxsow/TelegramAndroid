@@ -57,6 +57,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
+import android.provider.Settings;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -304,6 +305,7 @@ import org.telegram.ui.Components.VideoCompressButton;
 import org.telegram.ui.Components.VideoEditTextureView;
 import org.telegram.ui.Components.VideoForwardDrawable;
 import org.telegram.ui.Components.VideoPlayer;
+import org.telegram.ui.Components.PlayerHudView;
 import org.telegram.ui.Components.VideoPlayerSeekBar;
 import org.telegram.ui.Components.VideoSeekPreviewImage;
 import org.telegram.ui.Components.VideoTimelinePlayView;
@@ -1103,6 +1105,23 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private long startedPlayTime;
     private boolean keepScreenOnFlagSet;
     private VideoPlayerControlFrameLayout videoPlayerControlFrameLayout;
+
+    // Tele iOS: iOS-style video player extras
+    private PlayerHudView iosPlayerHud;
+    private int iosVerticalGesture;
+    private float iosGestureStartY;
+    private float iosGestureStartValue;
+    private boolean iosVideoFillMode;
+    private boolean iosControlsLocked;
+    private long iosLastUnlockTap;
+    private Runnable iosLockPillHideRunnable;
+    private FrameLayout iosLockOverlay;
+    private LinearLayout iosLockPill;
+    private TextView iosLockPillText;
+    private ImageView iosLockPillIcon;
+    private ActionBarMenuSubItem fillItem;
+    private ActionBarMenuSubItem lockItem;
+    private ActionBarMenuSubItem gesturesItem;
     private String lastControlFrameDuration;
     private Animator videoPlayerControlAnimator;
     private boolean videoPlayerControlVisible = true;
@@ -2207,6 +2226,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private final static int gallery_menu_delete2 = 26;
     private final static int gallery_menu_fast_fwd = 27;
     private final static int gallery_menu_subtitles = 28;
+    // Tele iOS: iOS-style video player extras
+    private final static int gallery_menu_fill = 29;
+    private final static int gallery_menu_lock = 30;
+    private final static int gallery_menu_gestures = 31;
 
     private final static int ads_sponsor_info = 101;
     private final static int ads_about = 102;
@@ -5770,6 +5793,17 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     }
                     loopItem.setEnabledByColor(playerLooping, 0xFFFFFFFF, 0xFF73B4EC);
                     loopItem.setSelectorColor(playerLooping ? 0x0F73B4EC : 0x0fffffff);
+                } else if (id == gallery_menu_fill) {
+                    // Tele iOS: toggle Fit/Fill display mode
+                    setIosVideoFillMode(!iosVideoFillMode);
+                } else if (id == gallery_menu_lock) {
+                    // Tele iOS: lock player controls
+                    engageIosControlsLock(true);
+                } else if (id == gallery_menu_gestures) {
+                    // Tele iOS: toggle side brightness/volume gestures
+                    SharedConfig.setPlayerSideGesturesEnabled(!SharedConfig.playerSideGesturesEnabled);
+                    gesturesItem.setEnabledByColor(SharedConfig.playerSideGesturesEnabled, 0xFFFFFFFF, 0xFF73B4EC);
+                    gesturesItem.setSelectorColor(SharedConfig.playerSideGesturesEnabled ? 0x0F73B4EC : 0x0fffffff);
                 } else if (id == gallery_menu_subtitles) {
                     toggleSubtitles();
                 } else if (id == gallery_menu_report) {
@@ -5932,6 +5966,20 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         subtitlesItem.setColors(0xfffafafa, 0xfffafafa);
         subtitlesItem.setSelectorColor(0x0fffffff);
         menuItem.hideSubItem(gallery_menu_subtitles);
+
+        // Tele iOS: iOS-style player extras (display mode, lock, gestures)
+        fillItem = menuItem.addSubItem(gallery_menu_fill, R.drawable.photo_expand, LocaleController.getString(R.string.VideoPlayerFill));
+        fillItem.setColors(0xfffafafa, 0xfffafafa);
+        fillItem.setSelectorColor(0x0fffffff);
+        menuItem.hideSubItem(gallery_menu_fill);
+        lockItem = menuItem.addSubItem(gallery_menu_lock, R.drawable.ic_ios_player_lock, LocaleController.getString(R.string.VideoPlayerLockControls));
+        lockItem.setColors(0xfffafafa, 0xfffafafa);
+        lockItem.setSelectorColor(0x0fffffff);
+        menuItem.hideSubItem(gallery_menu_lock);
+        gesturesItem = menuItem.addSubItem(gallery_menu_gestures, R.drawable.ic_ios_player_gestures, LocaleController.getString(R.string.VideoPlayerSideGestures));
+        gesturesItem.setColors(0xfffafafa, 0xfffafafa);
+        gesturesItem.setSelectorColor(SharedConfig.playerSideGesturesEnabled ? 0x0F73B4EC : 0x0fffffff);
+        menuItem.hideSubItem(gallery_menu_gestures);
         setMenuItemIcon(false, true);
         menuItem.setPopupItemsSelectorColor(0x0fffffff);
 
@@ -9707,7 +9755,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
     private void createVideoControlsInterface() {
         videoPlayerControlFrameLayout = new VideoPlayerControlFrameLayout(containerView.getContext());
-        containerView.addView(videoPlayerControlFrameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT));
+        // Tele iOS: iOS-style floating glass control bar
+        GradientDrawable iosGlassBackground = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xF2141418, 0xE61C1C22});
+        iosGlassBackground.setCornerRadius(AndroidUtilities.dp(24));
+        videoPlayerControlFrameLayout.setBackground(iosGlassBackground);
+        containerView.addView(videoPlayerControlFrameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT, 12, 0, 12, 12));
 
         final VideoPlayerSeekBar.SeekBarDelegate seekBarDelegate = new VideoPlayerSeekBar.SeekBarDelegate() {
             @Override
@@ -9770,8 +9822,9 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         videoPlayerControlFrameLayout.addView(videoPlayerSeekbarView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         videoPlayerSeekbar = new VideoPlayerSeekBar(videoPlayerSeekbarView);
-        videoPlayerSeekbar.setHorizontalPadding(dp(2));
-        videoPlayerSeekbar.setColors(0x33ffffff, 0x33ffffff, Color.WHITE, Color.WHITE, Color.WHITE, 0x59ffffff);
+        // Tele iOS: iOS-like slim white seekbar inside the glass bar
+        videoPlayerSeekbar.setHorizontalPadding(dp(16));
+        videoPlayerSeekbar.setColors(0x4CFFFFFF, 0x4CFFFFFF, Color.WHITE, Color.WHITE, Color.WHITE, 0x59ffffff);
         videoPlayerSeekbar.setDelegate(seekBarDelegate);
 
         videoPreviewFrame = new VideoSeekPreviewImage(containerView.getContext(), () -> {
@@ -9794,14 +9847,18 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
         };
         videoPreviewFrame.setAlpha(0.0f);
-        containerView.addView(videoPreviewFrame, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 48 + 10));
+        containerView.addView(videoPreviewFrame, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 48 + 22));
 
         videoPlayerTime = new SimpleTextView(containerView.getContext());
         videoPlayerTime.setTextColor(0xffffffff);
         videoPlayerTime.setGravity(Gravity.RIGHT | Gravity.TOP);
         videoPlayerTime.setTextSize(14);
         videoPlayerTime.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        videoPlayerControlFrameLayout.addView(videoPlayerTime, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.TOP, 0, 15, 12, 0));
+        videoPlayerControlFrameLayout.addView(videoPlayerTime, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.TOP, 0, 15, 18, 0));
+
+        // Tele iOS: brightness / volume HUD overlay (pure pass-through)
+        iosPlayerHud = new PlayerHudView(containerView.getContext());
+        containerView.addView(iosPlayerHud, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
 
         exitFullscreenButton = new ImageView(containerView.getContext());
         exitFullscreenButton.setImageResource(R.drawable.msg_minvideo);
@@ -9822,6 +9879,208 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             parentActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         });
     }
+
+    // Tele iOS: iOS-style player helpers start
+
+    private void showIosHud(int type, float value) {
+        if (iosPlayerHud == null) {
+            return;
+        }
+        iosPlayerHud.setTypeAndValue(type, value);
+        iosPlayerHud.showAnimated();
+    }
+
+    private void hideIosHud() {
+        if (iosPlayerHud != null) {
+            iosPlayerHud.hideAnimated();
+        }
+    }
+
+    private float getIosBrightnessFraction() {
+        if (windowLayoutParams == null) {
+            return 0.5f;
+        }
+        float brightness = windowLayoutParams.screenBrightness;
+        if (brightness < 0) {
+            try {
+                brightness = Settings.System.getInt(parentActivity.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS) / 255f;
+            } catch (Exception e) {
+                brightness = 0.5f;
+            }
+        }
+        return Utilities.clamp(brightness < 0.03f ? 0.03f : brightness, 1f, 0f);
+    }
+
+    private float getIosVolumeFraction() {
+        AudioManager audioManager = (AudioManager) parentActivity.getSystemService(Context.AUDIO_SERVICE);
+        int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        if (max <= 0) {
+            return 0f;
+        }
+        return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) / (float) max;
+    }
+
+    private void applyIosGestureValue(int type, float value) {
+        value = Utilities.clamp(value, 1f, 0f);
+        if (type == PlayerHudView.TYPE_BRIGHTNESS) {
+            if (windowLayoutParams == null || windowView == null || parentActivity == null) {
+                return;
+            }
+            try {
+                windowLayoutParams.screenBrightness = Math.max(value, 0.01f);
+                WindowManager windowManager = (WindowManager) parentActivity.getSystemService(Context.WINDOW_SERVICE);
+                windowManager.updateViewLayout(windowView, windowLayoutParams);
+            } catch (Exception ignore) {
+            }
+        } else {
+            if (parentActivity == null) {
+                return;
+            }
+            AudioManager audioManager = (AudioManager) parentActivity.getSystemService(Context.AUDIO_SERVICE);
+            int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            if (max > 0) {
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(value * max), 0);
+            }
+        }
+        if (iosPlayerHud != null) {
+            iosPlayerHud.setValue(value);
+        }
+    }
+
+    private void restoreIosBrightness() {
+        if (windowLayoutParams != null && windowView != null && parentActivity != null) {
+            try {
+                windowLayoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                WindowManager windowManager = (WindowManager) parentActivity.getSystemService(Context.WINDOW_SERVICE);
+                windowManager.updateViewLayout(windowView, windowLayoutParams);
+            } catch (Exception ignore) {
+            }
+        }
+    }
+
+    private void setIosVideoFillMode(boolean fill) {
+        if (aspectRatioFrameLayout == null) {
+            return;
+        }
+        iosVideoFillMode = fill;
+        try {
+            aspectRatioFrameLayout.setResizeMode(fill ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM : AspectRatioFrameLayout.RESIZE_MODE_FIT);
+        } catch (Exception ignore) {
+        }
+        updateIosFillItemState();
+    }
+
+    private void updateIosFillItemState() {
+        if (fillItem == null) {
+            return;
+        }
+        fillItem.setTextAndIcon(LocaleController.getString(iosVideoFillMode ? R.string.VideoPlayerFit : R.string.VideoPlayerFill), R.drawable.photo_expand);
+        fillItem.setSelectorColor(iosVideoFillMode ? 0x0F73B4EC : 0x0fffffff);
+    }
+
+    private void engageIosControlsLock(boolean lock) {
+        if (lock) {
+            if (iosLockOverlay == null) {
+                createIosLockOverlay();
+            }
+            if (iosLockOverlay == null) {
+                return;
+            }
+            iosControlsLocked = true;
+            iosLastUnlockTap = 0;
+            iosLockOverlay.setVisibility(View.VISIBLE);
+            showIosLockPill(false);
+            if (lockItem != null) {
+                lockItem.setTextAndIcon(LocaleController.getString(R.string.VideoPlayerUnlockHint), R.drawable.ic_ios_player_unlock);
+            }
+            toggleActionBar(false, true);
+        } else {
+            iosControlsLocked = false;
+            if (iosLockOverlay != null) {
+                iosLockOverlay.setVisibility(View.GONE);
+            }
+            if (iosLockPillHideRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(iosLockPillHideRunnable);
+            }
+            if (lockItem != null) {
+                lockItem.setTextAndIcon(LocaleController.getString(R.string.VideoPlayerLockControls), R.drawable.ic_ios_player_lock);
+            }
+        }
+    }
+
+    private void createIosLockOverlay() {
+        if (windowView == null) {
+            return;
+        }
+        final GradientDrawable pillBackground = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{0xF2141418, 0xE61C1C22});
+        pillBackground.setCornerRadius(AndroidUtilities.dp(24));
+
+        iosLockOverlay = new FrameLayout(windowView.getContext()) {
+            @Override
+            public boolean onTouchEvent(MotionEvent event) {
+                // Tele iOS: swallow all touches while controls are locked
+                if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_UP) {
+                    showIosLockPill(false);
+                }
+                return true;
+            }
+        };
+        iosLockOverlay.setClickable(true);
+        iosLockOverlay.setVisibility(View.GONE);
+        windowView.addView(iosLockOverlay, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+        iosLockPill = new LinearLayout(windowView.getContext());
+        iosLockPill.setOrientation(LinearLayout.HORIZONTAL);
+        iosLockPill.setGravity(Gravity.CENTER_VERTICAL);
+        iosLockPill.setBackground(pillBackground);
+        iosLockPill.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
+        iosLockPill.setOnClickListener(v -> {
+            long now = System.currentTimeMillis();
+            if (iosLastUnlockTap != 0 && now - iosLastUnlockTap < 2500) {
+                engageIosControlsLock(false);
+                hideIosLockPill();
+            } else {
+                iosLastUnlockTap = now;
+                showIosLockPill(true);
+            }
+        });
+        iosLockPillIcon = new ImageView(windowView.getContext());
+        iosLockPillIcon.setImageResource(R.drawable.ic_ios_player_lock);
+        iosLockPill.addView(iosLockPillIcon, LayoutHelper.createLinear(24, 24, 0, 0, 0, 8, 0));
+        iosLockPillText = new TextView(windowView.getContext());
+        iosLockPillText.setTextColor(0xFFFFFFFF);
+        iosLockPillText.setTextSize(14);
+        iosLockPillText.setVisibility(View.GONE);
+        iosLockPill.addView(iosLockPillText, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+        iosLockOverlay.addView(iosLockPill, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 44, Gravity.TOP | Gravity.RIGHT, 0, 12, 12, 0));
+    }
+
+    private void showIosLockPill(boolean withHint) {
+        if (iosLockPill == null) {
+            return;
+        }
+        iosLockPillText.setVisibility(withHint ? View.VISIBLE : View.GONE);
+        if (withHint) {
+            iosLockPillText.setText(LocaleController.getString(R.string.VideoPlayerUnlockHint));
+        }
+        iosLockPill.animate().alpha(1f).setDuration(180).start();
+        if (iosLockPillHideRunnable != null) {
+            AndroidUtilities.cancelRunOnUIThread(iosLockPillHideRunnable);
+        }
+        iosLockPillHideRunnable = () -> {
+            if (iosLockPill != null) {
+                iosLockPill.animate().alpha(0f).setDuration(300).start();
+            }
+        };
+        AndroidUtilities.runOnUIThread(iosLockPillHideRunnable, withHint ? 3000 : 2200);
+    }
+
+    private void hideIosLockPill() {
+        if (iosLockPill != null) {
+            iosLockPill.animate().alpha(0f).setDuration(200).start();
+        }
+    }
+    // Tele iOS: iOS-style player helpers end
 
     private int[] fixVideoWidthHeight(int w, int h) {
         int[] result = new int[]{w, h};
@@ -16133,11 +16392,23 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 menuItem.showSubItem(gallery_menu_speed);
                 menuItem.setSubItemShown(gallery_menu_create_sticker, false);
                 speedGap.setVisibility(menuItem.getVisibleSubItemsCount() > 1 ? View.VISIBLE : View.GONE);
+                // Tele iOS: iOS-style player extras
+                menuItem.showSubItem(gallery_menu_lock);
+                menuItem.showSubItem(gallery_menu_gestures);
+                if (!isEmbedVideo && aspectRatioFrameLayout != null) {
+                    menuItem.showSubItem(gallery_menu_fill);
+                }
+                updateIosFillItemState();
             } else {
                 speedItem.setVisibility(View.GONE);
                 videoItem.setVisibility(View.GONE);
                 speedGap.setVisibility(View.GONE);
                 menuItem.setSubItemShown(gallery_menu_create_sticker, !noforwards && currentMessageObject != null && currentMessageObject.isPhoto() && !currentMessageObject.isLivePhoto());
+                // Tele iOS: hide player extras for non-video media
+                menuItem.hideSubItem(gallery_menu_fill);
+                menuItem.hideSubItem(gallery_menu_lock);
+                menuItem.hideSubItem(gallery_menu_gestures);
+                engageIosControlsLock(false);
                 menuItem.checkHideMenuItem();
             }
             updateQualityItems();
@@ -18528,6 +18799,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         }
         isVisibleOrAnimating = false;
         openedFullScreenVideo = false;
+        // Tele iOS: restore player extras state on close
+        engageIosControlsLock(false);
+        restoreIosBrightness();
+        setIosVideoFillMode(false);
         try {
             if (visibleDialog != null) {
                 visibleDialog.dismiss();
@@ -19544,6 +19819,19 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                         return true;
                     }
                 }
+                // Tele iOS: iOS-style vertical side swipes (left = brightness, right = volume).
+                // Only upward drags claim the gesture so the existing drag-down-to-close stays intact.
+                if (iosVerticalGesture == 0 && SharedConfig.playerSideGesturesEnabled && isCurrentVideo && (videoPlayer != null || photoViewerWebView != null && photoViewerWebView.isControllable()) && currentEditMode == EDIT_MODE_NONE && sendPhotoType != SELECT_TYPE_AVATAR && sendPhotoType != SELECT_TYPE_STICKER && scale == 1 && !draggingDown && !zooming && !changingPage && dx > dp(6) && dragY - ev.getY() > dp(20) && dy > dx * 1.8f) {
+                    iosVerticalGesture = ev.getX() < getContainerViewWidth() / 2f ? PlayerHudView.TYPE_BRIGHTNESS : PlayerHudView.TYPE_VOLUME;
+                    iosGestureStartY = ev.getY();
+                    iosGestureStartValue = iosVerticalGesture == PlayerHudView.TYPE_BRIGHTNESS ? getIosBrightnessFraction() : getIosVolumeFraction();
+                    showIosHud(iosVerticalGesture, iosGestureStartValue);
+                }
+                if (iosVerticalGesture != 0 && ev.getPointerCount() == 1) {
+                    float iosValue = iosGestureStartValue + (iosGestureStartY - ev.getY()) / (getContainerViewHeight() * 0.7f);
+                    applyIosGestureValue(iosVerticalGesture, iosValue);
+                    return true;
+                }
                 if (placeProvider.canScrollAway() && currentEditMode == EDIT_MODE_NONE && sendPhotoType != SELECT_TYPE_AVATAR && sendPhotoType != SELECT_TYPE_STICKER && canDragDown && !draggingDown && scale == 1 && dy >= dp(30) && dy / 2 > dx) {
                     draggingDown = true;
                     hidePressedDrawables();
@@ -19632,6 +19920,12 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
             paintViewTouched = 0;
             maskPaintViewTouched = 0;
+            if (iosVerticalGesture != 0) {
+                // Tele iOS: end brightness/volume gesture
+                iosVerticalGesture = 0;
+                hideIosHud();
+                return true;
+            }
             if (zooming) {
                 invalidCoords = true;
                 float maxScale = sendPhotoType == SELECT_TYPE_STICKER ? 10.0f : 3.0f;

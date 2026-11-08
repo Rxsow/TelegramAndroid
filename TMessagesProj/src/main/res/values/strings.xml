@@ -1525,6 +1525,11 @@
     <string name="QualityCached">・cached</string>
     <string name="VideoPlayerSpeed">Speed</string>
     <string name="VideoPlayerLoop">Loop</string>
+    <string name="VideoPlayerFill">Fill screen</string>
+    <string name="VideoPlayerFit">Fit screen</string>
+    <string name="VideoPlayerLockControls">Lock controls</string>
+    <string name="VideoPlayerUnlockHint">Tap again to unlock</string>
+    <string name="VideoPlayerSideGestures">Side gestures</string>
     <string name="VideoPlayerChromecast">Chromecast</string>
     <string name="SendAsFile">Send as file</string>
     <string name="SendAsFiles">Send as files</string>

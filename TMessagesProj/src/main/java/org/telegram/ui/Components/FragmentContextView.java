@@ -1052,7 +1052,7 @@ public class FragmentContextView extends FrameLayout implements NotificationCent
         final TLRPC.Document document = messageObject.getDocument();
         final int docId = document != null ? (int) document.id : messageObject.getId();
         miniCoverView.setVisibility(VISIBLE);
-        if (docId == lastCoverDocId && (miniCoverView.getImageReceiver().hasBitmapImage() || miniCoverView.getDrawable() != null)) {
+        if (docId == lastCoverDocId && (miniCoverView.getImageReceiver().hasBitmapImage() || miniCoverView.getImageReceiver().getDrawable() != null)) {
             return;
         }
         lastCoverDocId = docId;

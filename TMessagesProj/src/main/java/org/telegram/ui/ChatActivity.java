@@ -26692,6 +26692,25 @@ public class ChatActivity extends BaseFragment implements
     private void processNewMessages(ArrayList<MessageObject> arr) {
         processNewMessages(arr, true);
     }
+
+    // Tele iOS: enable the composer→bubble text send transition (TextMessageEnterTransition) for
+    // plain text messages. Stock already animates voice, round videos and stickers here; typed text
+    // was excluded because MessageObject.shouldAnimateSending() requires sendAnimationData.
+    // The transition only runs while ChatActivityEnterView still holds the sent text (200 ms
+    // moveToSendStateRunnable window), so stale or delayed messages cannot animate.
+    private boolean shouldAnimateSendingText(MessageObject obj) {
+        if (chatActivityEnterView == null || obj == null || obj.type != MessageObject.TYPE_TEXT || !obj.isOut() || !obj.wasJustSent) {
+            return false;
+        }
+        if (obj.textLayoutBlocks == null || obj.textLayoutBlocks.size() != 1 || obj.textLayoutBlocks.get(0).textLayout == null || obj.textLayoutBlocks.get(0).textLayout.getLineCount() > 10) {
+            return false;
+        }
+        if (obj.getDialogId() != dialog_id || chatMode != MODE_DEFAULT || messagesDict[0].indexOfKey(obj.getId()) >= 0) {
+            return false;
+        }
+        return chatActivityEnterView.canShowMessageTransition();
+    }
+
     private void processNewMessages(ArrayList<MessageObject> arr, final boolean animatedFromBottom) {
         FileLog.d("processNewMessages " + arr.size() + " messages");
 
@@ -26979,7 +26998,7 @@ public class ChatActivity extends BaseFragment implements
                 } else if (currentChat != null && currentChat.megagroup && (action instanceof TLRPC.TL_messageActionChatAddUser || action instanceof TLRPC.TL_messageActionChatDeleteUser)) {
                     reloadMegagroup = true;
                 }
-                if (a == 0 && obj.shouldAnimateSending() && chatMode != MODE_SCHEDULED) {
+                if (a == 0 && (obj.shouldAnimateSending() || shouldAnimateSendingText(obj)) && chatMode != MODE_SCHEDULED) {
                     needAnimateToMessage = obj;
                 }
                 if (obj.isOut() && obj.wasJustSent) {
@@ -27142,7 +27161,7 @@ public class ChatActivity extends BaseFragment implements
                 }
                 addToPolls(obj, null);
 
-                final boolean canAnimateMessage = a == 0 && obj.shouldAnimateSending() && chatMode != MODE_SCHEDULED
+                final boolean canAnimateMessage = a == 0 && (obj.shouldAnimateSending() || shouldAnimateSendingText(obj)) && chatMode != MODE_SCHEDULED
                     && (chatMode != MODE_QUICK_REPLIES || messages.size() + 1 < getMessagesController().config.quickReplyMessagesLimit.get())
                     && (chatMode != MODE_WELCOME_MESSAGES || messages.size() + 1 < getMessagesController().config.ephemeralWelcomeMessagesMax.get());
                 if (canAnimateMessage) {

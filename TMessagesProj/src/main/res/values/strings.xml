@@ -2819,7 +2819,8 @@
     <string name="PopupDisabled">Disabled</string>
     <string name="LedDisabled">Disabled</string>
     <string name="RepeatDisabled">Off</string>
-    <string name="InChatSound">In-Chat Sounds</string>
+    <string name="InChatSound">Receive Sound in Chat</string>
+    <string name="InChatSoundOut">Send Sound in Chat</string>
     <string name="SoundDefault">Default</string>
     <string name="VibrationDefault">Default</string>
     <string name="NotificationsDefault">Default</string>

@@ -133,6 +133,8 @@ public class NotificationsController extends BaseController implements Notificat
     private boolean notifyCheck = false;
     private int lastOnlineFromOtherDevice = 0;
     private boolean inChatSoundEnabled;
+    // Tele iOS: separate toggle for the in-chat send (outgoing) sound
+    private boolean inChatSoundOutEnabled;
     private int lastBadgeCount = -1;
     private String launcherClassName;
 
@@ -208,6 +210,18 @@ public class NotificationsController extends BaseController implements Notificat
         notificationGroup = "messages" + (currentAccount == 0 ? "" : currentAccount);
         SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
         inChatSoundEnabled = preferences.getBoolean("EnableInChatSound", true);
+        // Tele iOS: load the separate in-chat send sound toggle
+        inChatSoundOutEnabled = preferences.getBoolean("EnableInChatSoundOut", true);
+        // Tele iOS: preload the in-chat send/receive UI sounds so the first playback has no audible delay
+        try {
+            soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
+            soundIn = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_in, 1);
+            soundOut = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_out, 1);
+            soundInLoaded = soundIn != 0;
+            soundOutLoaded = soundOut != 0;
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
         showBadgeNumber = preferences.getBoolean("badgeNumber", true);
         showBadgeMuted = preferences.getBoolean("badgeNumberMuted", false);
         showBadgeMessages = preferences.getBoolean("badgeNumberMessages", true);
@@ -505,6 +519,15 @@ public class NotificationsController extends BaseController implements Notificat
 
     public void setInChatSoundEnabled(boolean value) {
         inChatSoundEnabled = value;
+    }
+
+    // Tele iOS: separate toggle for the in-chat send (outgoing) sound
+    public void setInChatSoundOutEnabled(boolean value) {
+        inChatSoundOutEnabled = value;
+    }
+
+    public boolean isInChatSoundOutEnabled() {
+        return inChatSoundOutEnabled;
     }
 
     public void setOpenedDialogId(long dialog_id, long topicId) {
@@ -6000,7 +6023,8 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     public void playOutChatSound() {
-        if (!inChatSoundEnabled || MediaController.getInstance().isRecordingAudio()) {
+        // Tele iOS: the send sound has its own toggle now (was previously gated by inChatSoundEnabled)
+        if (!inChatSoundOutEnabled || MediaController.getInstance().isRecordingAudio()) {
             return;
         }
         try {

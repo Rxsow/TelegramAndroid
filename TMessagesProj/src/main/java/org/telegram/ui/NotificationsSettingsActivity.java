@@ -137,6 +137,8 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
     @Keep
     private int inchatSoundRow;
     @Keep
+    private int inchatSoundOutRow;
+    @Keep
     private int inappPriorityRow;
     private int callsSection2Row;
     private int callsSectionRow;
@@ -236,6 +238,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         inappVibrateRow = rowCount++;
         inappPreviewRow = rowCount++;
         inchatSoundRow = rowCount++;
+        inchatSoundOutRow = rowCount++;
         if (Build.VERSION.SDK_INT >= 21) {
             inappPriorityRow = rowCount++;
         } else {
@@ -704,6 +707,14 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 editor.putBoolean("EnableInChatSound", !enabled);
                 editor.commit();
                 getNotificationsController().setInChatSoundEnabled(!enabled);
+            } else if (position == inchatSoundOutRow) {
+                // Tele iOS: separate toggle for the in-chat send sound
+                SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
+                SharedPreferences.Editor editor = preferences.edit();
+                enabled = preferences.getBoolean("EnableInChatSoundOut", true);
+                editor.putBoolean("EnableInChatSoundOut", !enabled);
+                editor.commit();
+                getNotificationsController().setInChatSoundOutEnabled(!enabled);
             } else if (position == inappPriorityRow) {
                 SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
                 SharedPreferences.Editor editor = preferences.edit();
@@ -1160,6 +1171,9 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                         checkCell.setTextAndCheck(getString("BadgeNumberUnread", R.string.BadgeNumberUnread), getNotificationsController().showBadgeMessages, false);
                     } else if (position == inchatSoundRow) {
                         checkCell.setTextAndCheck(getString("InChatSound", R.string.InChatSound), preferences.getBoolean("EnableInChatSound", true), true);
+                    } else if (position == inchatSoundOutRow) {
+                        // Tele iOS: separate toggle for the in-chat send sound
+                        checkCell.setTextAndCheck(getString("InChatSoundOut", R.string.InChatSoundOut), preferences.getBoolean("EnableInChatSoundOut", true), true);
                     } else if (position == callsVibrateRow) {
                         checkCell.setTextAndCheck(getString("Vibrate", R.string.Vibrate), preferences.getBoolean("EnableCallVibrate", true), true);
                     } else if (position == accountsAllRow) {
@@ -1346,7 +1360,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
             } else if (position == inappSoundRow || position == inappVibrateRow || position == notificationsServiceConnectionRow ||
                     position == inappPreviewRow || position == contactJoinedRow || position == pinnedMessageRow ||
                     position == notificationsServiceRow || position == badgeNumberMutedRow || position == badgeNumberMessagesRow ||
-                    position == badgeNumberShowRow || position == inappPriorityRow || position == inchatSoundRow ||
+                    position == badgeNumberShowRow || position == inappPriorityRow || position == inchatSoundRow || position == inchatSoundOutRow ||
                     position == androidAutoAlertRow || position == accountsAllRow || position == disableUnifiedPushRow) {
                 return 1;
             } else if (position == resetNotificationsRow || position == unifiedPushDistributorRow || position == unifiedPushGatewayRow) {

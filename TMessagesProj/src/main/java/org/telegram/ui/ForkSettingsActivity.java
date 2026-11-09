@@ -1053,9 +1053,9 @@ public class ForkSettingsActivity extends BaseFragment {
                 FileLog.e("ForkSettingsActivity: notification icon dialog failed", e);
             }
         } else if (id == ID_CUSTOM_SEND_SOUND) {
-            showCustomSoundDialog(true);
+            runSoundTapSafely("custom send sound", () -> showCustomSoundDialog(true));
         } else if (id == ID_CUSTOM_RECEIVE_SOUND) {
-            showCustomSoundDialog(false);
+            runSoundTapSafely("custom receive sound", () -> showCustomSoundDialog(false));
         } else if (id == ID_QUICK_SAVE_BOOKMARK) {
             toggle("iosQuickSaveBookmark", item, view);
 
@@ -2085,6 +2085,27 @@ public class ForkSettingsActivity extends BaseFragment {
         showDialog(builder.create());
     }
 
+    // Tele iOS: a settings tap must never crash the whole app – log the exact
+    // exception and surface it as a toast (same idea as reportSectionError) so
+    // the failure is visible and reportable even without logcat
+    private void runSoundTapSafely(String what, Runnable action) {
+        try {
+            action.run();
+        } catch (Throwable t) {
+            FileLog.e("ForkSettingsActivity: " + what + " failed", t);
+            try {
+                Context ctx = getParentActivity() != null ? getParentActivity() : getContext();
+                if (ctx != null) {
+                    String msg = "Tele iOS " + what + ": " + t.getClass().getSimpleName();
+                    if (t.getMessage() != null && t.getMessage().length() < 120) {
+                        msg += ": " + t.getMessage();
+                    }
+                    android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception ignore) {}
+        }
+    }
+
     // Tele iOS: custom in-chat send/receive sounds (pick audio files from device storage) ----------------
 
     private SharedPreferences customSoundPrefs() {
@@ -2117,7 +2138,7 @@ public class ForkSettingsActivity extends BaseFragment {
     }
 
     private void showCustomSoundDialog(boolean send) {
-        Context context = getParentActivity();
+        Context context = getContext();
         if (context == null) {
             return;
         }
@@ -2137,9 +2158,11 @@ public class ForkSettingsActivity extends BaseFragment {
                 context.getString(R.string.TeleIOSSoundChoose)
             };
         }
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        // Tele iOS: use a bottom sheet (same pattern as the working bubble color picker)
+        // instead of an AlertDialog – the styled items dialog crashed on some devices
+        BottomSheet.Builder builder = new BottomSheet.Builder(context);
         builder.setTitle(LocaleController.getString(send ? R.string.TeleIOSCustomSendSound : R.string.TeleIOSCustomReceiveSound));
-        builder.setItems(options, (dialog, which) -> {
+        builder.setItems(options, (d, which) -> {
             if (which == 0) {
                 startSoundPick(send);
             } else if (which == 1) {
@@ -2148,8 +2171,7 @@ public class ForkSettingsActivity extends BaseFragment {
                 resetCustomSound(send);
             }
         });
-        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        showDialog(builder.create());
+        builder.show();
     }
 
     private void startSoundPick(boolean send) {

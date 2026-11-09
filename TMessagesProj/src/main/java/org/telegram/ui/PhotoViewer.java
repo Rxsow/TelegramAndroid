@@ -1108,6 +1108,15 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
     // Tele iOS: iOS-style video player extras
     private PlayerHudView iosPlayerHud;
+    private FrameLayout iosPlayerButtonsRow;
+    private ImageView iosShareButton;
+    private ImageView iosRewindButton;
+    private ImageView iosPlayPauseButton;
+    private ImageView iosForwardButton;
+    private ImageView iosFullscreenButton;
+    private PlayPauseDrawable iosPlayPauseDrawable;
+    private TextView iosVideoFileNameTextView;
+    private ActionBarMenuItem pipMenuItem;
     private int iosVerticalGesture;
     private float iosGestureStartY;
     private float iosGestureStartValue;
@@ -3133,7 +3142,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 ignoreLayout = false;
             }
 
-            final int bottomLayoutHeight = bottomLayout.getVisibility() != GONE ? dp(48) : 0;
+            // Tele iOS: reserve space for the taller iOS control panel in viewer mode only
+            final int bottomLayoutHeight = bottomLayout.getVisibility() != GONE ? (sendPhotoType == SELECT_TYPE_NO_SELECT ? dp(120) : dp(48)) : 0;
 
             final int groupedPhotosHeight;
             if (groupedPhotosListView != null && groupedPhotosListView.getVisibility() != GONE) {
@@ -3613,6 +3623,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             int extraWidth;
             ignoreLayout = true;
+            // Tele iOS: keep the fullscreen button icon in sync with the orientation
+            iosUpdateFullscreenIcon(parentWidth > parentHeight);
             LayoutParams layoutParams = (LayoutParams) videoPlayerTime.getLayoutParams();
             if (parentWidth > parentHeight) {
                 if (exitFullscreenButton.getVisibility() != VISIBLE) {
@@ -3688,6 +3700,19 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         private void onProgressChanged(float progress) {
             videoPlayerTime.setAlpha(progress);
             exitFullscreenButton.setAlpha(progress);
+            // Tele iOS: keep the iOS-style buttons row and file name in sync with the control bar
+            if (iosPlayerButtonsRow != null) {
+                iosPlayerButtonsRow.setAlpha(progress);
+                if (translationYAnimationEnabled) {
+                    iosPlayerButtonsRow.setTranslationY(dpf2(24) * (1f - progress));
+                }
+            }
+            if (iosVideoFileNameTextView != null) {
+                iosVideoFileNameTextView.setAlpha(0.85f * progress);
+                if (translationYAnimationEnabled) {
+                    iosVideoFileNameTextView.setTranslationY(dpf2(24) * (1f - progress));
+                }
+            }
             if (seekBarTransitionEnabled) {
                 videoPlayerTime.setPivotX(videoPlayerTime.getWidth());
                 videoPlayerTime.setPivotY(videoPlayerTime.getHeight());
@@ -5850,6 +5875,23 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         fastForwardItem = menu.addItem(gallery_menu_fast_fwd, R.drawable.ic_ab_forward_anonym);
         fastForwardItem.setContentDescription(getString(R.string.FastForward));
 
+        // Tele iOS: direct PiP button in the top bar (iOS-style), next to the quality gear
+        pipMenuItem = menu.addItem(gallery_menu_pip, R.drawable.menu_video_pip);
+        pipMenuItem.setContentDescription(getString(R.string.PipMinimize));
+        pipMenuItem.setOnClickListener(v -> {
+            if (parentActivity == null || !isPlaying || !AndroidUtilities.checkInlinePermissions(parentActivity) || PipVideoOverlay.isVisible()) {
+                return;
+            }
+            if (isEmbedVideo) {
+                if (actionBar != null && actionBar.getActionBarMenuOnItemClick() != null) {
+                    actionBar.getActionBarMenuOnItemClick().onItemClick(gallery_menu_pip);
+                }
+            } else {
+                switchToPip(false);
+            }
+        });
+        setItemVisible(pipMenuItem, false, false);
+
         videoItem = menu.addItem(gallery_menu_quality, videoItemIcon = new ChooseQualityLayout.QualityIcon(activityContext, R.drawable.video_settings, new DarkThemeResourceProvider()));
         videoItemIcon.setCallback(videoItem.getIconView());
         videoItem.getPopupLayout().setSwipeBackForegroundColor(0xff222222);
@@ -6005,7 +6047,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 super.dispatchDraw(canvas);
             }
         };
-        bottomLayout.setBackgroundColor(0x7f000000);
+        bottomLayout.setBackgroundColor(0x00000000); // Tele iOS: iOS-style floating glass panels instead of a solid strip
         containerView.addView(bottomLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT));
 
         navigationBar = new View(activityContext);
@@ -9755,11 +9797,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
     private void createVideoControlsInterface() {
         videoPlayerControlFrameLayout = new VideoPlayerControlFrameLayout(containerView.getContext());
-        // Tele iOS: iOS-style floating glass control bar
+        // Tele iOS: iOS-style floating glass control panel (timeline row + buttons row form one surface)
         GradientDrawable iosGlassBackground = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xF2141418, 0xE61C1C22});
-        iosGlassBackground.setCornerRadius(AndroidUtilities.dp(24));
+        iosGlassBackground.setCornerRadii(new float[]{AndroidUtilities.dp(24), AndroidUtilities.dp(24), 0, 0, 0, 0, 0, 0});
         videoPlayerControlFrameLayout.setBackground(iosGlassBackground);
-        containerView.addView(videoPlayerControlFrameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT, 12, 0, 12, 12));
+        containerView.addView(videoPlayerControlFrameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT, 12, 0, 12, 64));
 
         final VideoPlayerSeekBar.SeekBarDelegate seekBarDelegate = new VideoPlayerSeekBar.SeekBarDelegate() {
             @Override
@@ -9847,7 +9889,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
         };
         videoPreviewFrame.setAlpha(0.0f);
-        containerView.addView(videoPreviewFrame, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 48 + 22));
+        containerView.addView(videoPreviewFrame, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 48 + 64 + 10));
 
         videoPlayerTime = new SimpleTextView(containerView.getContext());
         videoPlayerTime.setTextColor(0xffffffff);
@@ -9855,6 +9897,104 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         videoPlayerTime.setTextSize(14);
         videoPlayerTime.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         videoPlayerControlFrameLayout.addView(videoPlayerTime, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.TOP, 0, 15, 18, 0));
+
+        // Tele iOS: iOS-style video file name floating above the control panel
+        iosVideoFileNameTextView = new TextView(containerView.getContext());
+        iosVideoFileNameTextView.setTextColor(0xFFFFFFFF);
+        iosVideoFileNameTextView.setTextSize(13);
+        iosVideoFileNameTextView.setTypeface(AndroidUtilities.bold());
+        iosVideoFileNameTextView.setSingleLine(true);
+        iosVideoFileNameTextView.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        iosVideoFileNameTextView.setGravity(Gravity.CENTER);
+        iosVideoFileNameTextView.setPadding(AndroidUtilities.dp(24), 0, AndroidUtilities.dp(24), 0);
+        iosVideoFileNameTextView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        iosVideoFileNameTextView.setVisibility(View.GONE);
+        iosVideoFileNameTextView.setAlpha(0f);
+        containerView.addView(iosVideoFileNameTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 48 + 64 + 4));
+
+        // Tele iOS: iOS-style buttons row – share, rewind 15s, play/pause, forward 15s, fullscreen
+        iosPlayerButtonsRow = new FrameLayout(containerView.getContext()) {
+            @Override
+            public void setAlpha(float alpha) {
+                super.setAlpha(alpha);
+                if (getVisibility() == View.VISIBLE && alpha <= 0f) {
+                    setVisibility(View.INVISIBLE);
+                } else if (getVisibility() == View.INVISIBLE && alpha > 0f) {
+                    setVisibility(View.VISIBLE);
+                }
+            }
+        };
+        GradientDrawable iosRowBackground = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xF2141418, 0xE61C1C22});
+        iosRowBackground.setCornerRadii(new float[]{0, 0, 0, 0, AndroidUtilities.dp(24), AndroidUtilities.dp(24), AndroidUtilities.dp(24), AndroidUtilities.dp(24)});
+        iosPlayerButtonsRow.setBackground(iosRowBackground);
+        iosPlayerButtonsRow.setVisibility(View.GONE);
+        iosPlayerButtonsRow.setAlpha(0f);
+        containerView.addView(iosPlayerButtonsRow, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 52, Gravity.BOTTOM | Gravity.LEFT, 12, 0, 12, 12));
+
+        LinearLayout iosButtonsLayout = new LinearLayout(containerView.getContext());
+        iosButtonsLayout.setOrientation(LinearLayout.HORIZONTAL);
+        iosButtonsLayout.setClipChildren(false);
+        iosPlayerButtonsRow.addView(iosButtonsLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+        LinearLayout.LayoutParams iosButtonParams = LayoutHelper.createLinear(0, LayoutHelper.MATCH_PARENT, 1f);
+
+        ImageView iosShareIcon = new ImageView(containerView.getContext());
+        iosShareIcon.setImageResource(R.drawable.msg_shareout);
+        iosShareButton = iosShareIcon;
+        iosButtonsLayout.addView(createIosPlayerButtonCell(iosShareIcon, getString(R.string.ShareFile), null, v -> onSharePressed()), iosButtonParams);
+
+        ImageView iosRewindIcon = new ImageView(containerView.getContext());
+        iosRewindIcon.setImageResource(R.drawable.ic_ios_player_rewind15);
+        iosRewindButton = iosRewindIcon;
+        iosButtonsLayout.addView(createIosPlayerButtonCell(iosRewindIcon, getString(R.string.VideoPlayerRewindSeconds), "15", v -> {
+            iosBouncePlayerButton(v);
+            iosSeekBySeconds(-15);
+        }), iosButtonParams);
+
+        ImageView iosPlayPauseIcon = new ImageView(containerView.getContext());
+        iosPlayPauseDrawable = new PlayPauseDrawable(22);
+        iosPlayPauseDrawable.setDuration(200);
+        iosPlayPauseIcon.setImageDrawable(iosPlayPauseDrawable);
+        iosPlayPauseButton = iosPlayPauseIcon;
+        iosButtonsLayout.addView(createIosPlayerButtonCell(iosPlayPauseIcon, getString(R.string.AccActionPlay), null, v -> {
+            iosBouncePlayerButton(v);
+            toggleVideoPlayer();
+        }), iosButtonParams);
+
+        ImageView iosForwardIcon = new ImageView(containerView.getContext());
+        iosForwardIcon.setImageResource(R.drawable.ic_ios_player_forward15);
+        iosForwardButton = iosForwardIcon;
+        iosButtonsLayout.addView(createIosPlayerButtonCell(iosForwardIcon, getString(R.string.VideoPlayerForwardSeconds), "15", v -> {
+            iosBouncePlayerButton(v);
+            iosSeekBySeconds(15);
+        }), iosButtonParams);
+
+        ImageView iosFullscreenIcon = new ImageView(containerView.getContext());
+        iosFullscreenIcon.setImageResource(R.drawable.msg_maxvideo);
+        iosFullscreenButton = iosFullscreenIcon;
+        iosButtonsLayout.addView(createIosPlayerButtonCell(iosFullscreenIcon, getString(R.string.AccSwitchToFullscreen), null, v -> {
+            if (parentActivity == null) {
+                return;
+            }
+            wasRotated = false;
+            if (prevOrientation == -10) {
+                prevOrientation = parentActivity.getRequestedOrientation();
+            }
+            if (AndroidUtilities.displaySize.x > AndroidUtilities.displaySize.y) {
+                fullscreenedByButton = 2;
+                parentActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            } else {
+                fullscreenedByButton = 1;
+                WindowManager manager = (WindowManager) parentActivity.getSystemService(Activity.WINDOW_SERVICE);
+                int displayRotation = manager.getDefaultDisplay().getRotation();
+                if (displayRotation == Surface.ROTATION_270) {
+                    parentActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
+                } else {
+                    parentActivity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                }
+                toggleActionBar(false, false);
+            }
+        }), iosButtonParams);
 
         // Tele iOS: brightness / volume HUD overlay (pure pass-through)
         iosPlayerHud = new PlayerHudView(containerView.getContext());
@@ -9893,6 +10033,80 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private void hideIosHud() {
         if (iosPlayerHud != null) {
             iosPlayerHud.hideAnimated();
+        }
+    }
+
+    // Tele iOS: builds one rounded cell of the iOS-style player buttons row
+    private FrameLayout createIosPlayerButtonCell(ImageView iconView, CharSequence contentDescription, String secondsLabel, View.OnClickListener listener) {
+        FrameLayout cell = new FrameLayout(containerView.getContext());
+        cell.setClipChildren(false);
+        cell.setBackground(Theme.createSelectorDrawable(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR));
+        cell.setContentDescription(contentDescription);
+        iconView.setScaleType(ImageView.ScaleType.CENTER);
+        cell.addView(iconView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        if (secondsLabel != null) {
+            TextView secondsTextView = new TextView(containerView.getContext());
+            secondsTextView.setText(secondsLabel);
+            secondsTextView.setTextColor(0xFFFFFFFF);
+            secondsTextView.setTextSize(8);
+            secondsTextView.setTypeface(AndroidUtilities.bold());
+            secondsTextView.setGravity(Gravity.CENTER);
+            secondsTextView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            cell.addView(secondsTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+        }
+        if (listener != null) {
+            cell.setOnClickListener(listener);
+        }
+        return cell;
+    }
+
+    // Tele iOS: short scale feedback animation, like iOS players do
+    private void iosBouncePlayerButton(View view) {
+        if (view == null) {
+            return;
+        }
+        view.animate().cancel();
+        view.setScaleX(1f);
+        view.setScaleY(1f);
+        view.animate().scaleX(0.86f).scaleY(0.86f).setDuration(70)
+            .withEndAction(() -> view.animate().scaleX(1f).scaleY(1f).setDuration(140).start())
+            .start();
+    }
+
+    // Tele iOS: seek the current video or web video by the given amount of seconds
+    private void iosSeekBySeconds(int seconds) {
+        long duration = getVideoDuration();
+        if (duration <= 0) {
+            return;
+        }
+        long current = (long) (videoPlayerSeekbar.getProgress() * duration);
+        long target = Utilities.clamp(current + seconds * 1000L, duration, 0);
+        seekVideoOrWebTo(target);
+        videoPlayerSeekbar.setProgress(target / (float) duration);
+        videoPlayerSeekbarView.invalidate();
+    }
+
+    // Tele iOS: keeps the bottom play/pause button in sync with the playback state
+    private void iosUpdatePlayPauseButton() {
+        if (iosPlayPauseButton == null || iosPlayPauseDrawable == null) {
+            return;
+        }
+        boolean playing = videoPlayer != null ? isPlaying : photoViewerWebView != null && photoViewerWebView.isPlaying();
+        iosPlayPauseDrawable.setPause(playing, true);
+        iosPlayPauseButton.setContentDescription(getString(playing ? R.string.AccActionPause : R.string.AccActionPlay));
+    }
+
+    // Tele iOS: switches the fullscreen button icon depending on the current orientation
+    private void iosUpdateFullscreenIcon(boolean landscape) {
+        if (iosFullscreenButton == null) {
+            return;
+        }
+        int res = landscape ? R.drawable.msg_minvideo : R.drawable.msg_maxvideo;
+        Integer current = (Integer) iosFullscreenButton.getTag();
+        if (current == null || current != res) {
+            iosFullscreenButton.setTag(res);
+            iosFullscreenButton.setImageResource(res);
+            iosFullscreenButton.setContentDescription(getString(landscape ? R.string.AccExitFullscreen : R.string.AccSwitchToFullscreen));
         }
     }
 
@@ -10784,6 +10998,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 pipAvailable = true;
                 pipItem.setEnabled(true);
                 pipItem.animate().alpha(1.0f).setDuration(175).withEndAction(null).start();
+                // Tele iOS: sync the direct PiP button state
+                if (pipMenuItem != null) {
+                    pipMenuItem.setEnabled(true);
+                    pipMenuItem.animate().alpha(1.0f).setDuration(175).withEndAction(null).start();
+                }
             }
             playerWasReady = true;
             if (currentMessageObject != null && currentMessageObject.isVideo()) {
@@ -10806,6 +11025,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 photoProgressViews[0].setIndexedAlpha(1, !isCurrentVideo && (!isAccessibilityEnabled() || playerWasPlaying) && ((playerAutoStarted && !playerWasPlaying) || !isActionBarVisible) ? 0f : 1f, false);
                 playerWasPlaying = true;
                 AndroidUtilities.runOnUIThread(updateProgressRunnable);
+                // Tele iOS: sync the bottom play/pause button
+                iosUpdatePlayPauseButton();
             }
         } else if (isPlaying || playbackState == ExoPlayer.STATE_ENDED) {
             if (currentEditMode != EDIT_MODE_PAINT) {
@@ -10813,6 +11034,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 photoProgressViews[0].setBackgroundState(PROGRESS_PLAY, false, photoProgressViews[0].animAlphas[1] > 0f);
             }
             isPlaying = false;
+            // Tele iOS: sync the bottom play/pause button
+            iosUpdatePlayPauseButton();
             AndroidUtilities.cancelRunOnUIThread(updateProgressRunnable);
             if (playbackState == ExoPlayer.STATE_ENDED) {
                 if (isCurrentVideo) {
@@ -11548,6 +11771,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         if (pipItem.isEnabled()) {
             pipItem.setEnabled(false);
             pipItem.animate().alpha(0.5f).setDuration(175).withEndAction(null).start();
+            // Tele iOS: sync the direct PiP button state
+            if (pipMenuItem != null) {
+                pipMenuItem.setEnabled(false);
+                pipMenuItem.animate().alpha(0.5f).setDuration(175).withEndAction(null).start();
+            }
         }
         if (keepScreenOnFlagSet) {
             try {
@@ -11637,6 +11865,39 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             } else {
                 videoPlayerControlFrameLayout.setVisibility(visible ? View.VISIBLE : View.GONE);
                 videoPlayerControlFrameLayout.setAlpha(visible ? 1f : 0f);
+            }
+            // Tele iOS: iOS-style buttons row and file name follow the control bar visibility
+            if (iosPlayerButtonsRow != null) {
+                if (animated) {
+                    if (visible) {
+                        iosPlayerButtonsRow.setVisibility(View.VISIBLE);
+                    }
+                    iosPlayerButtonsRow.animate().alpha(visible ? 1f : 0f).setDuration(200)
+                        .withEndAction(() -> {
+                            if (!visible && iosPlayerButtonsRow != null) {
+                                iosPlayerButtonsRow.setVisibility(View.GONE);
+                            }
+                        }).start();
+                } else {
+                    iosPlayerButtonsRow.setVisibility(visible ? View.VISIBLE : View.GONE);
+                    iosPlayerButtonsRow.setAlpha(visible ? 1f : 0f);
+                }
+            }
+            if (iosVideoFileNameTextView != null) {
+                if (animated) {
+                    if (visible) {
+                        iosVideoFileNameTextView.setVisibility(View.VISIBLE);
+                    }
+                    iosVideoFileNameTextView.animate().alpha(visible ? 0.85f : 0f).setDuration(200)
+                        .withEndAction(() -> {
+                            if (!visible && iosVideoFileNameTextView != null) {
+                                iosVideoFileNameTextView.setVisibility(View.GONE);
+                            }
+                        }).start();
+                } else {
+                    iosVideoFileNameTextView.setVisibility(visible ? View.VISIBLE : View.GONE);
+                    iosVideoFileNameTextView.setAlpha(visible ? 0.85f : 0f);
+                }
             }
             if (allowShare && pageBlocksAdapter == null) {
                 if (visible) {
@@ -14113,6 +14374,8 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
             playVideoOrWeb();
         }
+        // Tele iOS: immediate feedback on the bottom play/pause button
+        iosUpdatePlayPauseButton();
         containerView.invalidate();
     }
 
@@ -15303,8 +15566,18 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                         pipItem.setEnabled(false);
                         setItemVisible(pipItem, true, !masksItemVisible && editItem.getAlpha() <= 0, 0.5f);
                         pipInvalidateAvailability();
+                        // Tele iOS: sync the direct PiP button state
+                        if (pipMenuItem != null) {
+                            pipMenuItem.setEnabled(false);
+                            pipMenuItem.setAlpha(0.5f);
+                        }
                     } else {
                         setItemVisible(pipItem, true, !masksItemVisible && editItem.getAlpha() <= 0);
+                        // Tele iOS: sync the direct PiP button state
+                        if (pipMenuItem != null) {
+                            pipMenuItem.setEnabled(true);
+                            pipMenuItem.setAlpha(1f);
+                        }
                     }
                     setItemVisible(editItem, false, false);
                     if (newMessageObject.hasAttachedStickers() && !DialogObject.isEncryptedDialog(newMessageObject.getDialogId())) {
@@ -15839,12 +16112,26 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     pipItem.setEnabled(false);
                     setItemVisible(pipItem, true, true, 0.5f);
                     pipInvalidateAvailability();
+                    // Tele iOS: sync the direct PiP button state
+                    if (pipMenuItem != null) {
+                        pipMenuItem.setEnabled(false);
+                        pipMenuItem.setAlpha(0.5f);
+                    }
                 } else {
                     setItemVisible(pipItem, true, true);
+                    // Tele iOS: sync the direct PiP button state
+                    if (pipMenuItem != null) {
+                        pipMenuItem.setEnabled(true);
+                        pipMenuItem.setAlpha(1f);
+                    }
                 }
             } else {
                 menuItem.hideSubItem(gallery_menu_openin);
                 setItemVisible(pipItem, false, true);
+                // Tele iOS: hide the direct PiP button for non-video page blocks
+                if (pipMenuItem != null) {
+                    setItemVisible(pipMenuItem, false, false);
+                }
             }
             if (bottomLayout.getVisibility() != View.GONE) {
                 bottomLayout.setVisibility(View.GONE);
@@ -15890,6 +16177,19 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         navigationBar.setVisibility(fancyShadows && sendPhotoType != SELECT_TYPE_STICKER ? View.GONE : View.VISIBLE);
         if (currentEditMode == EDIT_MODE_NONE) {
             navigationBar.setBackgroundColor(fancyShadows ? (sendPhotoType == SELECT_TYPE_STICKER ? 0x66000000 : 0) : (sendPhotoType == SELECT_TYPE_STICKER ? 0xFF000000 : 0x7f000000));
+        }
+        // Tele iOS: iOS-style minimal top bar for videos – hide title/subtitle,
+        // the file name is shown above the bottom panel instead (like on iOS)
+        final boolean iosVideoTopBar = (isVideo && !isLivePhoto) && sendPhotoType == SELECT_TYPE_NO_SELECT && currentEditMode == EDIT_MODE_NONE;
+        if (iosVideoTopBar) {
+            title = "";
+            actionBarContainer.setSubtitle("", animated);
+            if (newFileName != null && iosVideoFileNameTextView != null) {
+                iosVideoFileNameTextView.setText(newFileName);
+            }
+        }
+        if (iosVideoFileNameTextView != null && !iosVideoTopBar) {
+            iosVideoFileNameTextView.setText(null);
         }
         if (title != null) {
             if (animated) {
@@ -16389,6 +16689,15 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             if (isVideo && !isLivePhoto || isEmbedVideo) {
                 speedItem.setVisibility(View.VISIBLE);
                 videoItem.setVisibility(View.VISIBLE);
+                // Tele iOS: show the direct PiP button for videos
+                if (pipMenuItem != null) {
+                    setItemVisible(pipMenuItem, !noforwards, animated);
+                    if (!noforwards) {
+                        boolean pipEnabled = AndroidUtilities.checkInlinePermissions(parentActivity);
+                        pipMenuItem.setEnabled(pipEnabled);
+                        pipMenuItem.setAlpha(pipEnabled ? 1f : 0.5f);
+                    }
+                }
                 menuItem.showSubItem(gallery_menu_speed);
                 menuItem.setSubItemShown(gallery_menu_create_sticker, false);
                 speedGap.setVisibility(menuItem.getVisibleSubItemsCount() > 1 ? View.VISIBLE : View.GONE);
@@ -16403,6 +16712,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 speedItem.setVisibility(View.GONE);
                 videoItem.setVisibility(View.GONE);
                 speedGap.setVisibility(View.GONE);
+                // Tele iOS: hide the direct PiP button for non-video media
+                if (pipMenuItem != null) {
+                    setItemVisible(pipMenuItem, false, animated);
+                }
                 menuItem.setSubItemShown(gallery_menu_create_sticker, !noforwards && currentMessageObject != null && currentMessageObject.isPhoto() && !currentMessageObject.isLivePhoto());
                 // Tele iOS: hide player extras for non-video media
                 menuItem.hideSubItem(gallery_menu_fill);

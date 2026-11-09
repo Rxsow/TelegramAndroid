@@ -1530,6 +1530,8 @@
     <string name="VideoPlayerLockControls">Lock controls</string>
     <string name="VideoPlayerUnlockHint">Tap again to unlock</string>
     <string name="VideoPlayerSideGestures">Side gestures</string>
+    <string name="VideoPlayerRewindSeconds">Rewind 15 seconds</string>
+    <string name="VideoPlayerForwardSeconds">Forward 15 seconds</string>
     <string name="VideoPlayerChromecast">Chromecast</string>
     <string name="SendAsFile">Send as file</string>
     <string name="SendAsFiles">Send as files</string>

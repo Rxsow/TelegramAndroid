@@ -274,8 +274,6 @@ public class SharedConfig {
     public static int lockRecordAudioVideoHint;
     public static boolean forwardingOptionsHintShown, replyingOptionsHintShown;
     public static boolean searchMessagesAsListUsed;
-    // Tele iOS: video player extras
-    public static boolean playerSideGesturesEnabled = true;
     public static boolean stickersReorderingHintUsed;
     public static int dayNightWallpaperSwitchHint;
     public static boolean storyReactionsLongPressHint;
@@ -678,7 +676,6 @@ public class SharedConfig {
             lastKeepMediaCheckTime = preferences.getInt("lastKeepMediaCheckTime", 0);
             lastLogsCheckTime = preferences.getInt("lastLogsCheckTime", 0);
             searchMessagesAsListUsed = preferences.getBoolean("searchMessagesAsListUsed", false);
-            playerSideGesturesEnabled = preferences.getBoolean("playerSideGesturesEnabled", true);
             stickersReorderingHintUsed = preferences.getBoolean("stickersReorderingHintUsed", false);
             storyReactionsLongPressHint = preferences.getBoolean("storyReactionsLongPressHint", false);
             storiesIntroShown = preferences.getBoolean("storiesIntroShown", false);
@@ -973,14 +970,6 @@ public class SharedConfig {
         SharedPreferences preferences = MessagesController.getGlobalMainSettings();
         SharedPreferences.Editor editor = preferences.edit();
         editor.putInt("suggestStickers", suggestStickers);
-        editor.apply();
-    }
-
-    public static void setPlayerSideGesturesEnabled(boolean value) {
-        playerSideGesturesEnabled = value;
-        SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putBoolean("playerSideGesturesEnabled", playerSideGesturesEnabled);
         editor.apply();
     }
 

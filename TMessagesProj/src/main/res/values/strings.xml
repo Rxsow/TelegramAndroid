@@ -91,6 +91,17 @@
     <string name="TeleIOSQuickSaveBookmarkInfo">Show a glass bookmark button above the forward button on channel posts to send them to Saved Messages with one tap.</string>
     <string name="TeleIOSQuickSaveBookmarkHint">The bookmark button appears on the right side of posts, above the forward arrow.</string>
     <string name="TeleIOSSavedToMessages">Forwarded to Saved Messages</string>
+    <string name="TeleIOSSoundsSection">In-chat sounds</string>
+    <string name="TeleIOSCustomSendSound">Custom send sound</string>
+    <string name="TeleIOSCustomReceiveSound">Custom receive sound</string>
+    <string name="TeleIOSCustomSoundsInfo">Pick your own audio file from device storage for the send and receive sounds in chats. Short clips are recommended. The file is copied into the app\'s private storage. Open Settings → Notifications to turn each sound on or off.</string>
+    <string name="TeleIOSSoundChoose">Choose from device</string>
+    <string name="TeleIOSSoundPreview">Preview</string>
+    <string name="TeleIOSSoundReset">Reset to default</string>
+    <string name="TeleIOSSoundDefault">Default</string>
+    <string name="TeleIOSSoundCustom">Custom</string>
+    <string name="TeleIOSSoundSet">Sound updated</string>
+    <string name="TeleIOSSoundSetError">Couldn\'t use this file as a sound</string>
     <string name="ForkCheckUpdate">Check updates</string>
     <string name="InAppCamera">Enable In-App Camera</string>
     <string name="InAppCameraInfo">In Attachments</string>

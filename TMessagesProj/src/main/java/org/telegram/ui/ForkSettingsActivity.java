@@ -9,6 +9,9 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.provider.OpenableColumns;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
@@ -81,6 +84,8 @@ import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -175,6 +180,8 @@ public class ForkSettingsActivity extends BaseFragment {
     public static final int ID_NOTIFICATION_ICON = 110;
     public static final int ID_BUBBLE_PREVIEW = 111;
     public static final int ID_QUICK_SAVE_BOOKMARK = 112;
+    public static final int ID_CUSTOM_SEND_SOUND = 113;
+    public static final int ID_CUSTOM_RECEIVE_SOUND = 114;
 
     public static final int ID_EXPORT_SETTINGS = 95;
     public static final int ID_IMPORT_SETTINGS = 96;
@@ -184,6 +191,8 @@ public class ForkSettingsActivity extends BaseFragment {
     private static final int REQUEST_EXPORT_SETTINGS = 7311;
     private static final int REQUEST_IMPORT_SETTINGS = 7312;
     private static final int REQUEST_PICK_FONT = 7313;
+    private static final int REQUEST_PICK_SEND_SOUND = 7314;
+    private static final int REQUEST_PICK_RECEIVE_SOUND = 7315;
 
     private UniversalRecyclerView listView;
     private ActionBarMenuItem searchItem;
@@ -778,6 +787,16 @@ public class ForkSettingsActivity extends BaseFragment {
             reportSectionError("notification icon section", e);
         }
 
+        // Tele iOS: custom in-chat send/receive sounds (user picks audio files from device storage)
+        try {
+            items.add(UItem.asHeader(LocaleController.getString(R.string.TeleIOSSoundsSection)));
+            items.add(UItem.asSettingsCell(ID_CUSTOM_SEND_SOUND, LocaleController.getString(R.string.TeleIOSCustomSendSound), customSoundValueText(true)));
+            items.add(UItem.asSettingsCell(ID_CUSTOM_RECEIVE_SOUND, LocaleController.getString(R.string.TeleIOSCustomReceiveSound), customSoundValueText(false)));
+            items.add(UItem.asShadow(LocaleController.getString(R.string.TeleIOSCustomSoundsInfo)));
+        } catch (Exception e) {
+            reportSectionError("custom sounds section", e);
+        }
+
         // Tele iOS: glass bookmark button above the forward button
         items.add(UItem.asButtonCheck(ID_QUICK_SAVE_BOOKMARK, LocaleController.getString(R.string.TeleIOSQuickSaveBookmark), LocaleController.getString(R.string.TeleIOSQuickSaveBookmarkInfo))
             .setChecked(pref("iosQuickSaveBookmark", true)).setMultiline(true));
@@ -1033,6 +1052,10 @@ public class ForkSettingsActivity extends BaseFragment {
             } catch (Exception e) {
                 FileLog.e("ForkSettingsActivity: notification icon dialog failed", e);
             }
+        } else if (id == ID_CUSTOM_SEND_SOUND) {
+            showCustomSoundDialog(true);
+        } else if (id == ID_CUSTOM_RECEIVE_SOUND) {
+            showCustomSoundDialog(false);
         } else if (id == ID_QUICK_SAVE_BOOKMARK) {
             toggle("iosQuickSaveBookmark", item, view);
 
@@ -2062,6 +2085,188 @@ public class ForkSettingsActivity extends BaseFragment {
         showDialog(builder.create());
     }
 
+    // Tele iOS: custom in-chat send/receive sounds (pick audio files from device storage) ----------------
+
+    private SharedPreferences customSoundPrefs() {
+        return MessagesController.getNotificationsSettings(currentAccount);
+    }
+
+    private File customSoundFile(boolean send) {
+        File dir = new File(ApplicationLoader.applicationContext.getFilesDir(), "custom_sounds");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        return new File(dir, send ? "send_custom.snd" : "receive_custom.snd");
+    }
+
+    private String customSoundValueText(boolean send) {
+        try {
+            SharedPreferences preferences = customSoundPrefs();
+            String path = preferences.getString(send ? "customOutChatSoundPath" : "customInChatSoundPath", null);
+            if (path != null && new File(path).exists()) {
+                String name = preferences.getString(send ? "customOutChatSoundName" : "customInChatSoundName", null);
+                if (TextUtils.isEmpty(name)) {
+                    name = LocaleController.getString(R.string.TeleIOSSoundCustom);
+                }
+                return name;
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return LocaleController.getString(R.string.TeleIOSSoundDefault);
+    }
+
+    private void showCustomSoundDialog(boolean send) {
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        SharedPreferences preferences = customSoundPrefs();
+        String path = preferences.getString(send ? "customOutChatSoundPath" : "customInChatSoundPath", null);
+        boolean hasCustom = path != null && new File(path).exists();
+
+        CharSequence[] options;
+        if (hasCustom) {
+            options = new CharSequence[]{
+                context.getString(R.string.TeleIOSSoundChoose),
+                context.getString(R.string.TeleIOSSoundPreview),
+                context.getString(R.string.TeleIOSSoundReset)
+            };
+        } else {
+            options = new CharSequence[]{
+                context.getString(R.string.TeleIOSSoundChoose)
+            };
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(LocaleController.getString(send ? R.string.TeleIOSCustomSendSound : R.string.TeleIOSCustomReceiveSound));
+        builder.setItems(options, (dialog, which) -> {
+            if (which == 0) {
+                startSoundPick(send);
+            } else if (which == 1) {
+                previewCustomSound(send);
+            } else if (which == 2) {
+                resetCustomSound(send);
+            }
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        showDialog(builder.create());
+    }
+
+    private void startSoundPick(boolean send) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("audio/*");
+            startActivityForResult(intent, send ? REQUEST_PICK_SEND_SOUND : REQUEST_PICK_RECEIVE_SOUND);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
+    private void previewCustomSound(boolean send) {
+        MediaPlayer player = null;
+        try {
+            String path = customSoundPrefs().getString(send ? "customOutChatSoundPath" : "customInChatSoundPath", null);
+            if (path == null || !new File(path).exists()) {
+                return;
+            }
+            player = new MediaPlayer();
+            player.setAudioAttributes(new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .build());
+            player.setDataSource(path);
+            player.setOnCompletionListener(MediaPlayer::release);
+            player.prepare();
+            player.start();
+        } catch (Exception e) {
+            FileLog.e(e);
+            if (player != null) {
+                try {
+                    player.release();
+                } catch (Exception ignore) {}
+            }
+        }
+    }
+
+    private void resetCustomSound(boolean send) {
+        try {
+            SharedPreferences preferences = customSoundPrefs();
+            String path = preferences.getString(send ? "customOutChatSoundPath" : "customInChatSoundPath", null);
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.remove(send ? "customOutChatSoundPath" : "customInChatSoundPath");
+            editor.remove(send ? "customOutChatSoundName" : "customInChatSoundName");
+            editor.commit();
+            if (path != null) {
+                new File(path).delete();
+            }
+            getNotificationsController().reloadCustomInChatSounds();
+            listView.adapter.update(false);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
+    private void applyPickedSound(boolean send, Uri uri) {
+        try {
+            Context context = ApplicationLoader.applicationContext;
+            File target = customSoundFile(send);
+            String displayName = null;
+            try {
+                android.database.Cursor cursor = context.getContentResolver().query(uri, null, null, null, null);
+                if (cursor != null) {
+                    try {
+                        int idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                        if (idx >= 0 && cursor.moveToFirst()) {
+                            displayName = cursor.getString(idx);
+                        }
+                    } finally {
+                        cursor.close();
+                    }
+                }
+            } catch (Exception ignore) {}
+            try (InputStream in = context.getContentResolver().openInputStream(uri)) {
+                if (in == null) {
+                    showSoundPickResult(false);
+                    return;
+                }
+                try (OutputStream out = new FileOutputStream(target)) {
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, read);
+                    }
+                    out.flush();
+                }
+            }
+            if (target.length() <= 0) {
+                showSoundPickResult(false);
+                return;
+            }
+            SharedPreferences preferences = customSoundPrefs();
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putString(send ? "customOutChatSoundPath" : "customInChatSoundPath", target.getAbsolutePath());
+            String name = TextUtils.isEmpty(displayName) ? target.getName() : displayName;
+            editor.putString(send ? "customOutChatSoundName" : "customInChatSoundName", name);
+            editor.commit();
+            getNotificationsController().reloadCustomInChatSounds();
+            listView.adapter.update(false);
+            // preview so the user immediately hears the picked sound
+            previewCustomSound(send);
+            showSoundPickResult(true);
+        } catch (Exception e) {
+            FileLog.e(e);
+            showSoundPickResult(false);
+        }
+    }
+
+    private void showSoundPickResult(boolean ok) {
+        try {
+            Context context = getParentActivity() != null ? getParentActivity() : ApplicationLoader.applicationContext;
+            android.widget.Toast.makeText(context, LocaleController.getString(ok ? R.string.TeleIOSSoundSet : R.string.TeleIOSSoundSetError), android.widget.Toast.LENGTH_SHORT).show();
+        } catch (Exception ignore) {}
+    }
+
     @Override
     public void onActivityResultFragment(int requestCode, int resultCode, Intent data) {
         if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
@@ -2084,6 +2289,10 @@ public class ForkSettingsActivity extends BaseFragment {
             builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             showDialog(builder.create());
             return;
+        } else if (requestCode == REQUEST_PICK_SEND_SOUND) {
+            applyPickedSound(true, uri);
+        } else if (requestCode == REQUEST_PICK_RECEIVE_SOUND) {
+            applyPickedSound(false, uri);
         } else if (requestCode == REQUEST_EXPORT_SETTINGS) {
             try (OutputStream out = context.getContentResolver().openOutputStream(uri)) {
                 if (out != null) {

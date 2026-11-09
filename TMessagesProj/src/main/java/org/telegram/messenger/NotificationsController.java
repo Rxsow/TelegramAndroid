@@ -161,6 +161,11 @@ public class NotificationsController extends BaseController implements Notificat
     private boolean soundInLoaded;
     private boolean soundOutLoaded;
     private boolean soundRecordLoaded;
+    // Tele iOS: custom user-picked in-chat send/receive sounds (audio files copied from device storage)
+    private int customSoundIn;
+    private int customSoundOut;
+    private boolean customSoundInLoaded;
+    private boolean customSoundOutLoaded;
     protected static AudioManager audioManager;
     private AlarmManager alarmManager;
 
@@ -215,10 +220,22 @@ public class NotificationsController extends BaseController implements Notificat
         // Tele iOS: preload the in-chat send/receive UI sounds so the first playback has no audible delay
         try {
             soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
+            // Tele iOS: track load completion of custom user-picked sounds (never auto-play on load)
+            soundPool.setOnLoadCompleteListener((sp, sampleId, status) -> {
+                if (status == 0) {
+                    if (sampleId == customSoundIn) {
+                        customSoundInLoaded = true;
+                    } else if (sampleId == customSoundOut) {
+                        customSoundOutLoaded = true;
+                    }
+                }
+            });
             soundIn = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_in, 1);
             soundOut = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_out, 1);
             soundInLoaded = soundIn != 0;
             soundOutLoaded = soundOut != 0;
+            // Tele iOS: load custom user-picked sounds if any are configured
+            loadCustomInChatSoundsInternal();
         } catch (Throwable e) {
             FileLog.e(e);
         }
@@ -528,6 +545,66 @@ public class NotificationsController extends BaseController implements Notificat
 
     public boolean isInChatSoundOutEnabled() {
         return inChatSoundOutEnabled;
+    }
+
+    // Tele iOS: (re)load the custom user-picked in-chat sounds after the user picks or resets them
+    public void reloadCustomInChatSounds() {
+        notificationsQueue.postRunnable(this::loadCustomInChatSoundsInternal);
+    }
+
+    private void loadCustomInChatSoundsInternal() {
+        try {
+            if (soundPool == null) {
+                return;
+            }
+            SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
+            String inPath = preferences.getString("customInChatSoundPath", null);
+            String outPath = preferences.getString("customOutChatSoundPath", null);
+            if (customSoundIn != 0) {
+                try {
+                    soundPool.unload(customSoundIn);
+                } catch (Exception ignore) {}
+                customSoundIn = 0;
+                customSoundInLoaded = false;
+            }
+            if (customSoundOut != 0) {
+                try {
+                    soundPool.unload(customSoundOut);
+                } catch (Exception ignore) {}
+                customSoundOut = 0;
+                customSoundOutLoaded = false;
+            }
+            if (!TextUtils.isEmpty(inPath)) {
+                File inFile = new File(inPath);
+                if (inFile.exists() && inFile.length() > 0) {
+                    try {
+                        customSoundIn = soundPool.load(inPath, 1);
+                        if (customSoundIn == 0) {
+                            customSoundInLoaded = false;
+                        }
+                    } catch (Exception e) {
+                        FileLog.e(e);
+                        customSoundIn = 0;
+                    }
+                }
+            }
+            if (!TextUtils.isEmpty(outPath)) {
+                File outFile = new File(outPath);
+                if (outFile.exists() && outFile.length() > 0) {
+                    try {
+                        customSoundOut = soundPool.load(outPath, 1);
+                        if (customSoundOut == 0) {
+                            customSoundOutLoaded = false;
+                        }
+                    } catch (Exception e) {
+                        FileLog.e(e);
+                        customSoundOut = 0;
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     public void setOpenedDialogId(long dialog_id, long topicId) {
@@ -3442,6 +3519,14 @@ public class NotificationsController extends BaseController implements Notificat
                         soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
                         soundPool.setOnLoadCompleteListener((soundPool, sampleId, status) -> {
                             if (status == 0) {
+                                // Tele iOS: never auto-play custom sounds on load completion
+                                if (sampleId == customSoundIn) {
+                                    customSoundInLoaded = true;
+                                    return;
+                                } else if (sampleId == customSoundOut) {
+                                    customSoundOutLoaded = true;
+                                    return;
+                                }
                                 try {
                                     soundPool.play(sampleId, 1.0f, 1.0f, 1, 0, 1.0f);
                                 } catch (Exception e) {
@@ -3449,16 +3534,29 @@ public class NotificationsController extends BaseController implements Notificat
                                 }
                             }
                         });
+                        // Tele iOS: load custom user-picked sounds into the freshly created pool
+                        loadCustomInChatSoundsInternal();
                     }
-                    if (soundIn == 0 && !soundInLoaded) {
-                        soundInLoaded = true;
-                        soundIn = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_in, 1);
-                    }
-                    if (soundIn != 0) {
-                        try {
-                            soundPool.play(soundIn, 1.0f, 1.0f, 1, 0, 1.0f);
-                        } catch (Exception e) {
-                            FileLog.e(e);
+                    // Tele iOS: prefer the custom user-picked receive sound when configured
+                    if (customSoundIn != 0) {
+                        if (customSoundInLoaded) {
+                            try {
+                                soundPool.play(customSoundIn, 1.0f, 1.0f, 1, 0, 1.0f);
+                            } catch (Exception e) {
+                                FileLog.e(e);
+                            }
+                        }
+                    } else {
+                        if (soundIn == 0 && !soundInLoaded) {
+                            soundInLoaded = true;
+                            soundIn = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_in, 1);
+                        }
+                        if (soundIn != 0) {
+                            try {
+                                soundPool.play(soundIn, 1.0f, 1.0f, 1, 0, 1.0f);
+                            } catch (Exception e) {
+                                FileLog.e(e);
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -6044,6 +6142,14 @@ public class NotificationsController extends BaseController implements Notificat
                     soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
                     soundPool.setOnLoadCompleteListener((soundPool, sampleId, status) -> {
                         if (status == 0) {
+                            // Tele iOS: never auto-play custom sounds on load completion
+                            if (sampleId == customSoundIn) {
+                                customSoundInLoaded = true;
+                                return;
+                            } else if (sampleId == customSoundOut) {
+                                customSoundOutLoaded = true;
+                                return;
+                            }
                             try {
                                 soundPool.play(sampleId, 1.0f, 1.0f, 1, 0, 1.0f);
                             } catch (Exception e) {
@@ -6051,16 +6157,29 @@ public class NotificationsController extends BaseController implements Notificat
                             }
                         }
                     });
+                    // Tele iOS: load custom user-picked sounds into the freshly created pool
+                    loadCustomInChatSoundsInternal();
                 }
-                if (soundOut == 0 && !soundOutLoaded) {
-                    soundOutLoaded = true;
-                    soundOut = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_out, 1);
-                }
-                if (soundOut != 0) {
-                    try {
-                        soundPool.play(soundOut, 1.0f, 1.0f, 1, 0, 1.0f);
-                    } catch (Exception e) {
-                        FileLog.e(e);
+                // Tele iOS: prefer the custom user-picked send sound when configured
+                if (customSoundOut != 0) {
+                    if (customSoundOutLoaded) {
+                        try {
+                            soundPool.play(customSoundOut, 1.0f, 1.0f, 1, 0, 1.0f);
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                        }
+                    }
+                } else {
+                    if (soundOut == 0 && !soundOutLoaded) {
+                        soundOutLoaded = true;
+                        soundOut = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_out, 1);
+                    }
+                    if (soundOut != 0) {
+                        try {
+                            soundPool.play(soundOut, 1.0f, 1.0f, 1, 0, 1.0f);
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                        }
                     }
                 }
             } catch (Exception e) {

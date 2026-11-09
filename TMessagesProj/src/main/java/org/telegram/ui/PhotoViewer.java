@@ -16691,7 +16691,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 videoItem.setVisibility(View.VISIBLE);
                 // Tele iOS: show the direct PiP button for videos
                 if (pipMenuItem != null) {
-                    setItemVisible(pipMenuItem, !noforwards, animated);
+                    setItemVisible(pipMenuItem, !noforwards, true);
                     if (!noforwards) {
                         boolean pipEnabled = AndroidUtilities.checkInlinePermissions(parentActivity);
                         pipMenuItem.setEnabled(pipEnabled);
@@ -16714,7 +16714,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 speedGap.setVisibility(View.GONE);
                 // Tele iOS: hide the direct PiP button for non-video media
                 if (pipMenuItem != null) {
-                    setItemVisible(pipMenuItem, false, animated);
+                    setItemVisible(pipMenuItem, false, true);
                 }
                 menuItem.setSubItemShown(gallery_menu_create_sticker, !noforwards && currentMessageObject != null && currentMessageObject.isPhoto() && !currentMessageObject.isLivePhoto());
                 // Tele iOS: hide player extras for non-video media

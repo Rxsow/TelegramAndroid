@@ -1353,9 +1353,10 @@ public class NotificationsController extends BaseController implements Notificat
                 long originalDialogId = dialogId;
                 long topicId = MessageObject.getTopicId(currentAccount, messageObject.messageOwner, getMessagesController().isForum(messageObject));
                 if (dialogId == openedDialogId && ApplicationLoader.isScreenOn && !messageObject.isStoryReactionPush && !messageObject.isOauthPush) {
-                    if (!isFcm) {
-                        playInChatSound();
-                    }
+                    // Tele iOS: play the in-chat receive sound regardless of how the
+                    // message was delivered (socket or FCM push) – the 500ms throttle
+                    // inside playInChatSound dedups duplicate deliveries
+                    playInChatSound();
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("skipped message because chat is already opened (openedDialogId = " + openedDialogId + ")");
                     }
@@ -3508,12 +3509,14 @@ public class NotificationsController extends BaseController implements Notificat
             FileLog.e(e);
         }
 
+        // Tele iOS: the per-dialog notification mute (notifyOverride == 2) used to
+        // block the in-chat receive sound, but the send sound never had this check –
+        // so muted chats played the send sound but never the receive sound. The
+        // in-chat sound is UI feedback for the open conversation (like iMessage),
+        // NOT a notification: it now plays regardless of the notification mute.
+        // Users who don't want it can turn off "in-chat receive sound" in
+        // Settings → Notifications.
         try {
-            SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
-            int notifyOverride = getNotifyOverride(preferences, openedDialogId, openedTopicId);
-            if (notifyOverride == 2) {
-                return;
-            }
             notificationsQueue.postRunnable(() -> {
                 if (Math.abs(SystemClock.elapsedRealtime() - lastSoundPlay) <= 500) {
                     return;

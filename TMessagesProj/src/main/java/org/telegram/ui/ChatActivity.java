@@ -26761,6 +26761,23 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
 
+        // Tele iOS: play the in-chat receive sound when the open chat gets a new
+        // incoming message – same reliable direct path as the send-sound hook
+        // (playOutChatSound). Works no matter how the message arrived (socket or
+        // FCM); the 500ms throttle inside playInChatSound dedups the call when
+        // the NotificationsController pipeline also triggers it. Screen-off is
+        // guarded so the normal notification sound plays instead (stock behavior).
+        if (ApplicationLoader.isScreenOn && !isPaused) {
+            for (int a = 0, N = arr.size(); a < N; a++) {
+                MessageObject messageObject = arr.get(a);
+                if (messageObject == null || messageObject.isOutOwner() || messageObject.isSponsored()) {
+                    continue;
+                }
+                getNotificationsController().playInChatSound();
+                break;
+            }
+        }
+
         boolean notifiedSearch = false;
         boolean hasDraftsReplaces = false;
         LongSparseArray<Long> scheduledGroupReplacement = null;

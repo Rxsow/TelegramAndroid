@@ -3492,7 +3492,11 @@ public class NotificationsController extends BaseController implements Notificat
         }
     }
 
-    private void playInChatSound() {
+    // Tele iOS: made public so ChatActivity can trigger it on the reliable
+    // didReceiveNewMessages path (send sound uses the same approach) – the 500ms
+    // throttle dedups calls coming from both the notification pipeline and the
+    // direct chat hook
+    public void playInChatSound() {
         if (!inChatSoundEnabled || MediaController.getInstance().isRecordingAudio()) {
             return;
         }
@@ -3537,16 +3541,18 @@ public class NotificationsController extends BaseController implements Notificat
                         // Tele iOS: load custom user-picked sounds into the freshly created pool
                         loadCustomInChatSoundsInternal();
                     }
-                    // Tele iOS: prefer the custom user-picked receive sound when configured
-                    if (customSoundIn != 0) {
-                        if (customSoundInLoaded) {
-                            try {
-                                soundPool.play(customSoundIn, 1.0f, 1.0f, 1, 0, 1.0f);
-                            } catch (Exception e) {
-                                FileLog.e(e);
-                            }
+                    // Tele iOS: prefer the custom user-picked receive sound when configured;
+                    // if the custom sample is not ready (still decoding or failed to load)
+                    // fall back to the built-in sound so the user never gets silence
+                    boolean playBuiltinIn = customSoundIn == 0 || !customSoundInLoaded;
+                    if (customSoundIn != 0 && customSoundInLoaded) {
+                        try {
+                            soundPool.play(customSoundIn, 1.0f, 1.0f, 1, 0, 1.0f);
+                        } catch (Exception e) {
+                            FileLog.e(e);
                         }
-                    } else {
+                    }
+                    if (playBuiltinIn) {
                         if (soundIn == 0 && !soundInLoaded) {
                             soundInLoaded = true;
                             soundIn = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_in, 1);
@@ -6160,16 +6166,17 @@ public class NotificationsController extends BaseController implements Notificat
                     // Tele iOS: load custom user-picked sounds into the freshly created pool
                     loadCustomInChatSoundsInternal();
                 }
-                // Tele iOS: prefer the custom user-picked send sound when configured
-                if (customSoundOut != 0) {
-                    if (customSoundOutLoaded) {
-                        try {
-                            soundPool.play(customSoundOut, 1.0f, 1.0f, 1, 0, 1.0f);
-                        } catch (Exception e) {
-                            FileLog.e(e);
-                        }
+                // Tele iOS: prefer the custom user-picked send sound when configured;
+                // fall back to the built-in sound if the custom sample is not ready
+                boolean playBuiltinOut = customSoundOut == 0 || !customSoundOutLoaded;
+                if (customSoundOut != 0 && customSoundOutLoaded) {
+                    try {
+                        soundPool.play(customSoundOut, 1.0f, 1.0f, 1, 0, 1.0f);
+                    } catch (Exception e) {
+                        FileLog.e(e);
                     }
-                } else {
+                }
+                if (playBuiltinOut) {
                     if (soundOut == 0 && !soundOutLoaded) {
                         soundOutLoaded = true;
                         soundOut = soundPool.load(ApplicationLoader.applicationContext, R.raw.sound_out, 1);

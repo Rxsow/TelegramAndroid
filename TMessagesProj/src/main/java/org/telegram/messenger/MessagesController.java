@@ -10532,6 +10532,8 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
             }
             if (info != null) {
+                // Tele iOS: Contact Change log – track bio changes from full user info
+                org.telegram.messenger.forkgram.ForkContactChanges.checkBio(currentAccount, user.id, info.about);
                 if (fullUsers.get(user.id) == null) {
                     fullUsers.put(user.id, info);
                     getTranslateController().updateDialogFull(user.id);
@@ -20061,6 +20063,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     } else if (baseUpdate instanceof TL_update.TL_updateUserName) {
                         TL_update.TL_updateUserName update = (TL_update.TL_updateUserName) baseUpdate;
                         TLRPC.User currentUser = getUser(update.user_id);
+                        // Tele iOS: Contact Change log – record contact name/username updates
+                        org.telegram.messenger.forkgram.ForkContactChanges.checkName(currentAccount, update.user_id, update.first_name, update.last_name, (update.usernames != null && update.usernames.size() == 1) ? update.usernames.get(0).username : null);
                         if (currentUser != null) {
                             if (!UserObject.isContact(currentUser)) {
                                 currentUser.first_name = update.first_name;
@@ -20140,6 +20144,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     } else if (baseUpdate instanceof TL_update.TL_updateUserPhoto) {
                         TL_update.TL_updateUserPhoto update = (TL_update.TL_updateUserPhoto) baseUpdate;
                         TLRPC.User currentUser = getUser(update.user_id);
+                        // Tele iOS: Contact Change log – record contact photo updates
+                        org.telegram.messenger.forkgram.ForkContactChanges.checkPhoto(currentAccount, update.user_id, update.photo == null ? 0 : update.photo.id);
                         if (currentUser != null) {
                             currentUser.photo = update.photo;
                         }
@@ -20200,6 +20206,8 @@ public class MessagesController extends BaseController implements NotificationCe
                             }
                         }
                         if (updated != null && updated.photo != null) {
+                            // Tele iOS: Contact Change log – photo delivered with TL_updateUser
+                            org.telegram.messenger.forkgram.ForkContactChanges.checkPhoto(currentAccount, update.user_id, updated.photo.id);
                             if (currentUser != null) {
                                 currentUser.photo = updated.photo;
                             }
@@ -20214,6 +20222,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     } else if (baseUpdate instanceof TL_update.TL_updateUserPhone) {
                         TL_update.TL_updateUserPhone update = (TL_update.TL_updateUserPhone) baseUpdate;
                         TLRPC.User currentUser = getUser(update.user_id);
+                        // Tele iOS: Contact Change log – record contact phone updates
+                        org.telegram.messenger.forkgram.ForkContactChanges.checkPhone(currentAccount, update.user_id, update.phone);
                         if (currentUser != null) {
                             currentUser.phone = update.phone;
                             Utilities.phoneBookQueue.postRunnable(() -> getContactsController().addContactToPhoneBook(currentUser, true));

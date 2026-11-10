@@ -122,6 +122,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BirthdayController;
+import org.telegram.messenger.forkgram.ModFont;
 import org.telegram.messenger.BotForumHelper;
 import org.telegram.messenger.BotWebViewVibrationEffect;
 import org.telegram.messenger.BuildVars;
@@ -5994,6 +5995,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         messageEditText.setHighlightColor(getThemedColor(Theme.key_chat_inTextSelectionHighlight));
         messageEditText.setHintColor(getThemedColor(Theme.key_chat_messagePanelHint));
         messageEditText.setHintTextColor(getThemedColor(Theme.key_chat_messagePanelHint));
+        // Tele iOS: the message input field follows the custom font (ModFont)
+        messageEditText.setTypeface(ModFont.override(null));
         messageEditText.setCursorColor(getThemedColor(Theme.key_chat_messagePanelCursor));
         messageEditText.setHandlesColor(getThemedColor(Theme.key_chat_TextSelectionCursor));
         messageEditTextContainer.addView(messageEditText, 1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 2, 0, 52, 1.5f));

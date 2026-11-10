@@ -33,6 +33,7 @@ import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -55,6 +56,7 @@ import org.telegram.messenger.forkgram.ForkSettingsLock;
 import org.telegram.messenger.forkgram.ForkNotificationIcons;
 import org.telegram.messenger.forkgram.HiddenAccountHelper;
 import org.telegram.messenger.forkgram.LinkReplacements;
+import org.telegram.messenger.forkgram.ForkContactChanges;
 import org.telegram.messenger.forkgram.ModFont;
 import org.telegram.messenger.forkgram.QuickAttachConfig;
 import org.telegram.messenger.forkgram.SettingsBackup;
@@ -110,6 +112,7 @@ public class ForkSettingsActivity extends BaseFragment {
     public static final int ID_CUSTOM_TITLE = 12;
     public static final int ID_AVATAR_CORNERS = 13;
     public static final int ID_CUSTOM_FONT = 14;
+    public static final int ID_CONTACT_CHANGES = 15;
 
     public static final int ID_SYNC_PINS = 20;
     public static final int ID_UNMUTED_ON_TOP = 21;
@@ -763,6 +766,7 @@ public class ForkSettingsActivity extends BaseFragment {
         }
         items.add(UItem.asSettingsCell(ID_CUSTOM_TITLE, LocaleController.getString(R.string.EditAdminRank), prefs().getString("forkCustomTitle", "Fork Client")));
         items.add(UItem.asSettingsCell(ID_CUSTOM_FONT, ApplicationLoader.applicationContext.getString(R.string.CustomFontTitle), ModFont.currentStateText()));
+        items.add(UItem.asSettingsCell(ID_CONTACT_CHANGES, LocaleController.getString(R.string.ContactChangesTitle), ForkContactChanges.summaryText()));
         items.add(UItem.asShadow(null));
 
         // Tele iOS: message bubble colors + live preview (guarded so a failure in this
@@ -1046,6 +1050,8 @@ public class ForkSettingsActivity extends BaseFragment {
             showCustomTitleDialog(view);
         } else if (id == ID_CUSTOM_FONT) {
             showCustomFontDialog();
+        } else if (id == ID_CONTACT_CHANGES) {
+            showContactChangesDialog();
         } else if (id == ID_NOTIFICATION_ICON) {
             try {
                 showNotificationIconDialog();
@@ -2084,6 +2090,68 @@ public class ForkSettingsActivity extends BaseFragment {
             }
         });
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        showDialog(builder.create());
+    }
+
+    // Tele iOS: Contact Change – a log of profile changes made by contacts
+    // (name, username, bio, phone number, photo), recorded by ForkContactChanges
+    private void showContactChangesDialog() {
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        org.json.JSONArray log = ForkContactChanges.getLog();
+        LinearLayout container = new LinearLayout(context);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = AndroidUtilities.dp(20);
+        container.setPadding(pad, AndroidUtilities.dp(6), pad, AndroidUtilities.dp(6));
+        if (log.length() == 0) {
+            TextView empty = new TextView(context);
+            empty.setTextSize(15);
+            empty.setLineSpacing(AndroidUtilities.dp(2), 1f);
+            empty.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, getResourceProvider()));
+            empty.setText(LocaleController.getString(R.string.ContactChangesEmpty));
+            container.addView(empty);
+        } else {
+            for (int i = 0; i < log.length(); i++) {
+                org.json.JSONObject e = log.optJSONObject(i);
+                if (e == null) {
+                    continue;
+                }
+                TextView head = new TextView(context);
+                head.setTextSize(13);
+                head.setTypeface(AndroidUtilities.bold());
+                head.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, getResourceProvider()));
+                head.setPadding(0, AndroidUtilities.dp(10), 0, AndroidUtilities.dp(2));
+                head.setText(e.optString("name", "") + "   \u00B7   " + ForkContactChanges.formatTimestamp(e.optLong("t")));
+                container.addView(head);
+                TextView body = new TextView(context);
+                body.setTextSize(14);
+                body.setTextColor(Theme.getColor(Theme.key_dialogTextBlack, getResourceProvider()));
+                String from = e.optString("from", "");
+                String to = e.optString("to", "");
+                String detail;
+                if (TextUtils.isEmpty(from) && TextUtils.isEmpty(to)) {
+                    detail = e.optString("field", "");
+                } else {
+                    detail = e.optString("field", "") + ":  " + (TextUtils.isEmpty(from) ? "\u2014" : from) + "  \u2192  " + (TextUtils.isEmpty(to) ? "\u2014" : to);
+                }
+                body.setText(detail);
+                container.addView(body);
+            }
+        }
+        ScrollView scroll = new ScrollView(context);
+        scroll.addView(container);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(LocaleController.getString(R.string.ContactChangesTitle));
+        builder.setView(scroll);
+        builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
+        if (log.length() > 0) {
+            builder.setNeutralButton(LocaleController.getString(R.string.ContactChangesClear), (dialog, which) -> {
+                ForkContactChanges.clearLog();
+                listView.adapter.update(false);
+            });
+        }
         showDialog(builder.create());
     }
 

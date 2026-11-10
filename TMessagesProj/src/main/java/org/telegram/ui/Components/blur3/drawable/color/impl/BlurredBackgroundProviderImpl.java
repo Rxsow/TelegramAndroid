@@ -98,9 +98,10 @@ public class BlurredBackgroundProviderImpl {
         return new BlurredBackgroundProviderBuilder(resourcesProvider)
                 .setBackgroundColor((r, isDark) -> {
                     if (!LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR)) {
-                        return Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground);
+                        // Tele iOS: glassy menu even without the chat-blur lite flag
+                        return Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground), 0.84f);
                     }
-                    return Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground), isDark ? 0.85f : 0.825f);
+                    return Theme.multAlpha(Theme.getColor(Theme.key_actionBarDefaultSubmenuBackground), isDark ? 0.82f : 0.78f);
                 })
                 .setStrokeColorTop(0x44FFFFFF, 0)
                 .setStrokeColorBottom(0x22FFFFFF, 0)

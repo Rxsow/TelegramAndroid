@@ -3696,6 +3696,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             proxyShieldIcon.setOnClickListener(v -> presentFragment(new ProxyListActivity()));
             // Tele iOS: 18dp badge – same visual weight as the 15dp status line text
             proxyShieldContainer.addView(proxyShieldIcon, LayoutHelper.createFrame(18, 18, Gravity.CENTER_HORIZONTAL));
+            // Tele iOS: a check mark shows inside the shield while connected to the proxy
+            ImageView proxyShieldCheck = new ImageView(getContext());
+            proxyShieldCheck.setImageResource(R.drawable.ic_ab_done);
+            proxyShieldCheck.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.SRC_IN));
+            proxyShieldContainer.addView(proxyShieldCheck, LayoutHelper.createFrame(9, 9, Gravity.CENTER_HORIZONTAL | Gravity.TOP, 0, 4, 0, 0));
             proxyShieldContainer.setVisibility(View.GONE);
             proxyShieldContainer.setAlpha(0f);
             actionBar.addView(proxyShieldContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));

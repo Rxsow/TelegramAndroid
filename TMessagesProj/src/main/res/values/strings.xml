@@ -11976,4 +11976,9 @@
     <string name="QuickAttachNewestFirst">Newest photos on the left</string>
     <string name="QuickAttachNewestFirstInfo">When off, recent photos are ordered from oldest to newest, left to right.</string>
     <string name="PhotoSent">Photo sent</string>
+    <string name="ContactChangesTitle">Contact Change</string>
+    <string name="ContactChangesNone">No changes yet</string>
+    <string name="ContactChangesEmpty">No contact changes recorded yet.\nWhen a contact changes their name, username, bio, phone number or photo, the change is reported here.</string>
+    <string name="ContactChangesCount">%1$d changes</string>
+    <string name="ContactChangesClear">Clear history</string>
 </resources>

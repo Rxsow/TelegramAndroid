@@ -4685,7 +4685,9 @@ public class ChatActivity extends BaseFragment implements
                 audioCallIconItem = menu.lazilyAddItem(call, R.drawable.call, themeDelegate);
                 audioCallIconItem.setContentDescription(LocaleController.getString(R.string.Call));
                 userFull = getMessagesController().getUserFull(currentUser.id);
-                if (userFull != null && userFull.phone_calls_available) {
+                // Tele iOS: the iOS clean header has no call icon – it would sit on
+                // top of the avatar capsule; calls stay in the 3-dot menu
+                if (userFull != null && userFull.phone_calls_available && !iosCleanHeader) {
                     showAudioCallAsIcon = !inPreviewMode;
                     audioCallIconItem.setVisibility(View.VISIBLE);
                 } else {
@@ -25316,7 +25318,7 @@ public class ChatActivity extends BaseFragment implements
                     }
                 }
                 if (headerItem != null) {
-                    showAudioCallAsIcon = userInfo.phone_calls_available && !inPreviewMode;
+                    showAudioCallAsIcon = userInfo.phone_calls_available && !inPreviewMode && !iosCleanHeader;
                     if (userInfo.phone_calls_available) {
                         if (showAudioCallAsIcon) {
                             if (audioCallIconItem != null) {
@@ -32497,7 +32499,9 @@ public class ChatActivity extends BaseFragment implements
             Rect backgroundPaddings = new Rect();
             Drawable shadowDrawable = getParentActivity().getResources().getDrawable(R.drawable.popup_fixed_alert4).mutate();
             shadowDrawable.getPadding(backgroundPaddings);
-            popupLayout.setBackgroundColor(getThemedColor(Theme.key_actionBarDefaultSubmenuBackground));
+            // Tele iOS: glassy menu – the fallback color stays translucent so the
+            // blurred scrim shows through when the blur-3 drawable is not used
+            popupLayout.setBackgroundColor(Theme.multAlpha(getThemedColor(Theme.key_actionBarDefaultSubmenuBackground), 0.84f));
             MessageSeenView messageSeenView = null;
 
             updateScrimSourceBitmap();
@@ -33827,26 +33831,37 @@ public class ChatActivity extends BaseFragment implements
             int minY = (int) (chatListView.getY() + dp(24));
             int maxY = totalHeight - height - dp(8);
             if (height < totalHeight) {
-                // Tele iOS: the menu (with the reactions row) is placed BELOW the
-                // message when the message sits in the top half of the screen, and
-                // ABOVE it when the message sits in the bottom half (iOS behavior).
-                int messageScreenY = (int) (chatListView.getY() + v.getTop() + y);
+                // Tele iOS: the menu (with the reactions row) must sit fully ABOVE
+                // or BELOW the selected message and never cover it. The message's
+                // real top/bottom edges are used (not the touch point), and the
+                // placement side is chosen by which side actually has room.
+                int messageTopY = (int) (chatListView.getY() + v.getTop());
                 int messageHeight = v.getMeasuredHeight();
                 if (isInsideContainer) {
                     int[] location = new int[2];
                     v.getLocationInWindow(location);
-                    messageScreenY = (int) (location[1] + y);
+                    messageTopY = location[1];
 
                     chatListView.getLocationInWindow(location);
                     minY = dp(24);
                     maxY = Math.min(location[1] + chatListView.getMeasuredHeight(), AndroidUtilities.displaySize.y) - dp(8) - height;
                 }
-                if (messageScreenY + messageHeight / 2f <= totalHeight / 2f) {
-                    popupY = messageScreenY + messageHeight + dp(12);
+                int messageBottomY = messageTopY + messageHeight;
+                int spaceAbove = messageTopY - minY - dp(12);
+                int spaceBelow = maxY - messageBottomY - dp(12);
+                boolean placeBelow;
+                if (spaceAbove >= height && spaceBelow >= height) {
+                    // both sides fit – iOS behavior: message in the top half → menu below
+                    placeBelow = messageTopY + messageHeight / 2f <= totalHeight / 2f;
                 } else {
-                    popupY = messageScreenY - height - dp(12);
+                    // otherwise pick the side with more room so the menu stays off the message
+                    placeBelow = spaceBelow >= spaceAbove;
                 }
-                popupY = Utilities.clamp(popupY, maxY, minY);
+                if (placeBelow) {
+                    popupY = Math.min(messageBottomY + dp(12), maxY);
+                } else {
+                    popupY = Math.max(messageTopY - height - dp(12), minY);
+                }
             } else {
                 popupY = inBubbleMode ? 0 : AndroidUtilities.statusBarHeight;
             }

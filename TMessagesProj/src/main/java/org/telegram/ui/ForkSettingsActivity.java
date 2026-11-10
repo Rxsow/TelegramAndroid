@@ -2052,15 +2052,17 @@ public class ForkSettingsActivity extends BaseFragment {
         if (context == null) {
             return;
         }
+        // Tele iOS: use LocaleController.getString – Context.getString would throw
+        // NotFoundException because these strings live in the localization assets
         CharSequence[] options;
         if (ModFont.enabled) {
             options = new CharSequence[]{
-                context.getString(R.string.CustomFontChoose),
-                context.getString(R.string.CustomFontReset)
+                LocaleController.getString(R.string.CustomFontChoose),
+                LocaleController.getString(R.string.CustomFontReset)
             };
         } else {
             options = new CharSequence[]{
-                context.getString(R.string.CustomFontChoose)
+                LocaleController.getString(R.string.CustomFontChoose)
             };
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -2146,28 +2148,37 @@ public class ForkSettingsActivity extends BaseFragment {
         String path = preferences.getString(send ? "customOutChatSoundPath" : "customInChatSoundPath", null);
         boolean hasCustom = path != null && new File(path).exists();
 
-        CharSequence[] options;
-        if (hasCustom) {
-            options = new CharSequence[]{
-                context.getString(R.string.TeleIOSSoundChoose),
-                context.getString(R.string.TeleIOSSoundPreview),
-                context.getString(R.string.TeleIOSSoundReset)
-            };
-        } else {
-            options = new CharSequence[]{
-                context.getString(R.string.TeleIOSSoundChoose)
-            };
+        // Tele iOS: never resolve strings with Context.getString here – in this
+        // build Telegram strings live in the binary localization assets, not in
+        // resources.arsc, so Context.getString throws NotFoundException.
+        // LocaleController.getString is the only safe path.
+        final boolean hasBundled = hasBundledSound(send);
+        java.util.List<CharSequence> optionList = new ArrayList<>();
+        if (hasBundled) {
+            optionList.add(LocaleController.getString(send ? R.string.TeleIOSSoundUseBundledSend : R.string.TeleIOSSoundUseBundledReceive));
         }
+        final int idxBundled = hasBundled ? optionList.size() - 1 : -1;
+        optionList.add(LocaleController.getString(R.string.TeleIOSSoundChoose));
+        final int idxChoose = optionList.size() - 1;
+        if (hasCustom) {
+            optionList.add(LocaleController.getString(R.string.TeleIOSSoundPreview));
+            optionList.add(LocaleController.getString(R.string.TeleIOSSoundReset));
+        }
+        CharSequence[] options = optionList.toArray(new CharSequence[0]);
+        final int idxPreview = hasCustom ? optionList.size() - 2 : -1;
+        final int idxReset = hasCustom ? optionList.size() - 1 : -1;
         // Tele iOS: use a bottom sheet (same pattern as the working bubble color picker)
         // instead of an AlertDialog – the styled items dialog crashed on some devices
         BottomSheet.Builder builder = new BottomSheet.Builder(context);
         builder.setTitle(LocaleController.getString(send ? R.string.TeleIOSCustomSendSound : R.string.TeleIOSCustomReceiveSound));
         builder.setItems(options, (d, which) -> {
-            if (which == 0) {
+            if (which == idxBundled) {
+                applyBundledSound(send);
+            } else if (which == idxChoose) {
                 startSoundPick(send);
-            } else if (which == 1) {
+            } else if (which == idxPreview) {
                 previewCustomSound(send);
-            } else if (which == 2) {
+            } else if (which == idxReset) {
                 resetCustomSound(send);
             }
         });
@@ -2226,6 +2237,55 @@ public class ForkSettingsActivity extends BaseFragment {
             listView.adapter.update(false);
         } catch (Exception e) {
             FileLog.e(e);
+        }
+    }
+
+    // Tele iOS: bundled sound file (shipped inside the APK assets) that the user
+    // provided. It is copied into the app's private storage, so the rest of the
+    // custom sound pipeline (preview, reset, NotificationsController) stays
+    // untouched and works purely with file paths – no resource lookups involved.
+    private boolean hasBundledSound(boolean send) {
+        try {
+            ApplicationLoader.applicationContext.getAssets().open(send ? "custom_send.mp3" : "custom_receive.mp3").close();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private void applyBundledSound(boolean send) {
+        try {
+            String assetName = send ? "custom_send.mp3" : "custom_receive.mp3";
+            File target = customSoundFile(send);
+            try (InputStream in = ApplicationLoader.applicationContext.getAssets().open(assetName)) {
+                try (OutputStream out = new FileOutputStream(target)) {
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, read);
+                    }
+                    out.flush();
+                }
+            }
+            SharedPreferences preferences = customSoundPrefs();
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putString(send ? "customOutChatSoundPath" : "customInChatSoundPath", target.getAbsolutePath());
+            editor.putString(send ? "customOutChatSoundName" : "customInChatSoundName", send ? "Send.mp3" : "receive.mp3");
+            editor.commit();
+            getNotificationsController().reloadCustomInChatSounds();
+            listView.adapter.update(false);
+        } catch (Throwable t) {
+            FileLog.e(t);
+            try {
+                Context ctx = getParentActivity() != null ? getParentActivity() : getContext();
+                if (ctx != null) {
+                    String msg = "Tele iOS apply bundled sound: " + t.getClass().getSimpleName();
+                    if (t.getMessage() != null && t.getMessage().length() < 120) {
+                        msg += ": " + t.getMessage();
+                    }
+                    android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception ignore) {}
         }
     }
 

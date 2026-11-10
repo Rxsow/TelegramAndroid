@@ -96,6 +96,8 @@
     <string name="TeleIOSCustomReceiveSound">Custom receive sound</string>
     <string name="TeleIOSCustomSoundsInfo">Pick your own audio file from device storage for the send and receive sounds in chats. Short clips are recommended. The file is copied into the app\'s private storage. Open Settings → Notifications to turn each sound on or off.</string>
     <string name="TeleIOSSoundChoose">Choose from device</string>
+    <string name="TeleIOSSoundUseBundledSend">Use Send.mp3 (included)</string>
+    <string name="TeleIOSSoundUseBundledReceive">Use receive.mp3 (included)</string>
     <string name="TeleIOSSoundPreview">Preview</string>
     <string name="TeleIOSSoundReset">Reset to default</string>
     <string name="TeleIOSSoundDefault">Default</string>

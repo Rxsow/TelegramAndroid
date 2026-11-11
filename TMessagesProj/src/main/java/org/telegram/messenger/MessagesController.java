@@ -20145,7 +20145,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         TL_update.TL_updateUserPhoto update = (TL_update.TL_updateUserPhoto) baseUpdate;
                         TLRPC.User currentUser = getUser(update.user_id);
                         // Tele iOS: Contact Change log – record contact photo updates
-                        org.telegram.messenger.forkgram.ForkContactChanges.checkPhoto(currentAccount, update.user_id, update.photo == null ? 0 : update.photo.id);
+                        org.telegram.messenger.forkgram.ForkContactChanges.checkPhoto(currentAccount, update.user_id, update.photo == null ? 0 : update.photo.photo_id);
                         if (currentUser != null) {
                             currentUser.photo = update.photo;
                         }
@@ -20207,7 +20207,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                         if (updated != null && updated.photo != null) {
                             // Tele iOS: Contact Change log – photo delivered with TL_updateUser
-                            org.telegram.messenger.forkgram.ForkContactChanges.checkPhoto(currentAccount, update.user_id, updated.photo.id);
+                            org.telegram.messenger.forkgram.ForkContactChanges.checkPhoto(currentAccount, update.user_id, updated.photo.photo_id);
                             if (currentUser != null) {
                                 currentUser.photo = updated.photo;
                             }

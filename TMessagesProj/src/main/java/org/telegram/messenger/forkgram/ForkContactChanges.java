@@ -9,7 +9,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
 
@@ -37,7 +39,7 @@ public final class ForkContactChanges {
         return ApplicationLoader.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
-    private static TLRPC.User user(int account, int uid) {
+    private static TLRPC.User user(int account, long uid) {
         try {
             return MessagesController.getInstance(account).getUser(uid);
         } catch (Throwable t) {
@@ -61,7 +63,7 @@ public final class ForkContactChanges {
         return name.trim();
     }
 
-    private static JSONObject readBase(int account, int uid) {
+    private static JSONObject readBase(int account, long uid) {
         try {
             String raw = prefs().getString(KEY_BASE + account + "_" + uid, null);
             if (!TextUtils.isEmpty(raw)) {
@@ -73,11 +75,11 @@ public final class ForkContactChanges {
         return new JSONObject();
     }
 
-    private static void writeBase(int account, int uid, JSONObject base) {
+    private static void writeBase(int account, long uid, JSONObject base) {
         prefs().edit().putString(KEY_BASE + account + "_" + uid, base.toString()).apply();
     }
 
-    private static void addEntry(int account, int uid, String field, String from, String to) {
+    private static void addEntry(int account, long uid, String field, String from, String to) {
         try {
             TLRPC.User user = user(account, uid);
             if (!eligible(user)) {
@@ -102,7 +104,7 @@ public final class ForkContactChanges {
     }
 
     /** Server reported a name (and/or username) update for a user. */
-    public static void checkName(int account, int uid, String newFirst, String newLast, String newUsername) {
+    public static void checkName(int account, long uid, String newFirst, String newLast, String newUsername) {
         try {
             TLRPC.User user = user(account, uid);
             if (!eligible(user)) {
@@ -138,7 +140,7 @@ public final class ForkContactChanges {
     }
 
     /** Server reported a phone number update for a user. */
-    public static void checkPhone(int account, int uid, String newPhone) {
+    public static void checkPhone(int account, long uid, String newPhone) {
         try {
             TLRPC.User user = user(account, uid);
             if (!eligible(user)) {
@@ -162,7 +164,7 @@ public final class ForkContactChanges {
     }
 
     /** Server reported a profile photo update for a user (photoId 0 = removed). */
-    public static void checkPhoto(int account, int uid, long newPhotoId) {
+    public static void checkPhoto(int account, long uid, long newPhotoId) {
         try {
             TLRPC.User user = user(account, uid);
             if (!eligible(user)) {
@@ -186,7 +188,7 @@ public final class ForkContactChanges {
     }
 
     /** Full user info arrived – track the bio ("about") field. */
-    public static void checkBio(int account, int uid, String newAbout) {
+    public static void checkBio(int account, long uid, String newAbout) {
         try {
             TLRPC.User user = user(account, uid);
             if (!eligible(user)) {

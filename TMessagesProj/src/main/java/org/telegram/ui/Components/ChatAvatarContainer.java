@@ -839,38 +839,15 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         final int actionBarHeight = ActionBar.getCurrentActionBarHeight();
         final int viewTop = (actionBarHeight - avatarImageView.getMeasuredHeight() - 2) / 2 + (occupyStatusBar ? AndroidUtilities.statusBarHeight : 0);
-        final int subtitleTop = viewTop + dp(glassMode ? 23.66f : 24);
         final int width = getMeasuredWidth();
 
         // iOS style: avatar anchored to the right edge
         final int avatarX = width - dp(4) - avatarImageView.getMeasuredWidth();
         avatarImageView.layout(avatarX, 1 + viewTop, avatarX + avatarImageView.getMeasuredWidth(), 1 + viewTop + avatarImageView.getMeasuredHeight());
 
-        // iOS style: name and status centered on the screen. The widget can be
-        // narrower than the screen (right margin), so use the parent width for
-        // true screen centering.
-        final int textW = titleTextView.getTextWidth();
-        int screenW = width;
-        final android.view.ViewParent parentView = getParent();
-        if (parentView instanceof View) {
-            screenW = ((View) parentView).getMeasuredWidth();
-        }
-        final int titleX = (screenW - textW) / 2;
-        final int titleGlyphTop;
-        SimpleTextView titleTextLargerCopyView = this.titleTextLargerCopyView.get();
-        if (getSubtitleTextView().getVisibility() != GONE) {
-            titleGlyphTop = viewTop + dp(1.66f);
-            titleTextView.layout(titleX, titleGlyphTop - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), titleGlyphTop + titleTextView.getTextHeight() - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
-            if (titleTextLargerCopyView != null) {
-                titleTextLargerCopyView.layout(titleX, viewTop + dp(1.66f), titleX + titleTextLargerCopyView.getMeasuredWidth(), viewTop + titleTextLargerCopyView.getTextHeight() + dp(1.66f));
-            }
-        } else {
-            titleGlyphTop = viewTop + dp(11);
-            titleTextView.layout(titleX, titleGlyphTop - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), titleGlyphTop + titleTextView.getTextHeight() - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
-            if (titleTextLargerCopyView != null) {
-                titleTextLargerCopyView.layout(titleX, viewTop + dp(10), titleX + titleTextLargerCopyView.getMeasuredWidth(), viewTop + titleTextLargerCopyView.getTextHeight() + dp(10));
-            }
-        }
+        // iOS style: name and status centered on the screen (laid out in
+        // layoutHeaderTexts, so it can also be re-run when the status changes)
+        layoutHeaderTexts();
         if (communityItem != null) {
             communityItem.layout(
                 avatarX + dp(28f),
@@ -892,6 +869,41 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (starFgItem != null) {
             starFgItem.layout(avatarX + dp(27), viewTop + dp(24), avatarX + dp(27) + starFgItem.getMeasuredWidth(), viewTop + dp(24) + starFgItem.getMeasuredHeight());
         }
+        // Tele iOS: capsule wraps BOTH the name and the status line (recomputed
+        // from the live text widths), so statuses and channel member counts are
+        // never rendered outside of the capsule
+        layoutIosTextCapsule();
+    }
+
+    // Tele iOS: lay out the centered name and status texts from the CURRENT text
+    // metrics. Extracted from onLayout so it can also be re-run whenever the
+    // status text changes (online / typing… / sending media…) — previously the
+    // status text kept its stale laid-out position and width from the last full
+    // layout pass, so it drifted out of the floating header capsule.
+    private void layoutHeaderTexts() {
+        final int actionBarHeight = ActionBar.getCurrentActionBarHeight();
+        final int viewTop = (actionBarHeight - avatarImageView.getMeasuredHeight() - 2) / 2 + (occupyStatusBar ? AndroidUtilities.statusBarHeight : 0);
+        final int subtitleTop = viewTop + dp(glassMode ? 23.66f : 24);
+        int screenW = getMeasuredWidth();
+        final android.view.ViewParent parentView = getParent();
+        if (parentView instanceof View) {
+            screenW = ((View) parentView).getMeasuredWidth();
+        }
+        final int titleX = (screenW - titleTextView.getTextWidth()) / 2;
+        SimpleTextView titleTextLargerCopyView = this.titleTextLargerCopyView.get();
+        if (getSubtitleTextView().getVisibility() != GONE) {
+            final int titleGlyphTop = viewTop + dp(1.66f);
+            titleTextView.layout(titleX, titleGlyphTop - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), titleGlyphTop + titleTextView.getTextHeight() - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
+            if (titleTextLargerCopyView != null) {
+                titleTextLargerCopyView.layout(titleX, viewTop + dp(1.66f), titleX + titleTextLargerCopyView.getMeasuredWidth(), viewTop + titleTextLargerCopyView.getTextHeight() + dp(1.66f));
+            }
+        } else {
+            final int titleGlyphTop = viewTop + dp(11);
+            titleTextView.layout(titleX, titleGlyphTop - titleTextView.getPaddingTop(), titleX + titleTextView.getMeasuredWidth(), titleGlyphTop + titleTextView.getTextHeight() - titleTextView.getPaddingTop() + titleTextView.getPaddingBottom());
+            if (titleTextLargerCopyView != null) {
+                titleTextLargerCopyView.layout(titleX, viewTop + dp(10), titleX + titleTextLargerCopyView.getMeasuredWidth(), viewTop + titleTextLargerCopyView.getTextHeight() + dp(10));
+            }
+        }
         final int subtitleW;
         if (subtitleTextView != null) {
             subtitleW = subtitleTextView.getTextWidth();
@@ -904,23 +916,21 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (subtitleTextView != null) {
             subtitleTextView.layout(subtitleX, subtitleTop, subtitleX + subtitleTextView.getMeasuredWidth(), subtitleTop + subtitleTextView.getTextHeight());
         } else if (animatedSubtitleTextView != null) {
-            animatedSubtitleTextView.layout(subtitleX, subtitleTop, subtitleX + subtitleTextView.getMeasuredWidth(), subtitleTop + animatedSubtitleTextView.getTextHeight());
+            animatedSubtitleTextView.layout(subtitleX, subtitleTop, subtitleX + animatedSubtitleTextView.getMeasuredWidth(), subtitleTop + animatedSubtitleTextView.getTextHeight());
         }
         SimpleTextView subtitleTextLargerCopyView = this.subtitleTextLargerCopyView.get();
         if (subtitleTextLargerCopyView != null) {
             subtitleTextLargerCopyView.layout(subtitleX, subtitleTop, subtitleX + subtitleTextLargerCopyView.getMeasuredWidth(), subtitleTop + subtitleTextLargerCopyView.getTextHeight());
         }
-        // Tele iOS: capsule wraps BOTH the name and the status line (recomputed
-        // from the live text widths), so statuses and channel member counts are
-        // never rendered outside of the capsule
-        layoutIosTextCapsule();
     }
 
     // Tele iOS: recompute the floating header capsule so it always wraps BOTH the
-    // name and the status line with comfortable padding. Called from onLayout and
-    // whenever title/subtitle text or visibility changes — previously the capsule
-    // kept its old size when the status appeared later (chat info loaded), so
-    // member counts and online statuses were rendered outside of the capsule.
+    // name and the status line. The texts are re-laid out first (layoutHeaderTexts)
+    // so the capsule always matches the positions the texts are actually drawn at,
+    // even when the status text changed without a full layout pass (online,
+    // typing…, sending media…). Previously the capsule was computed from the fresh
+    // text metrics while the status text view kept its stale laid-out position —
+    // the text ended up rendered outside of the capsule.
     private void layoutIosTextCapsule() {
         if (iosTextCapsuleView == null || titleTextView == null || avatarImageView == null) {
             return;
@@ -929,44 +939,36 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
         if (width <= 0) {
             return;
         }
-        final int actionBarHeight = ActionBar.getCurrentActionBarHeight();
-        final int viewTop = (actionBarHeight - avatarImageView.getMeasuredHeight() - 2) / 2 + (occupyStatusBar ? AndroidUtilities.statusBarHeight : 0);
-        final int subtitleTop = viewTop + dp(glassMode ? 23.66f : 24);
-        final View sub = getSubtitleTextView();
-        final boolean subtitleRow = sub != null && sub.getVisibility() != GONE;
-        final int titleTextTop = viewTop + (subtitleRow ? dp(1.66f) : dp(11));
-
+        layoutHeaderTexts();
         final int titleW = titleTextView.getTextWidth();
         if (titleW <= 0) {
             iosTextCapsuleView.layout(0, 0, 0, 0);
             iosCapsuleBounds.setEmpty();
             return;
         }
-        // iOS style: name and status are centered on the real screen width (the
-        // widget itself can be narrower due to right margins)
+        // the capsule hugs the freshly laid-out title bounds
+        int cl = titleTextView.getLeft() - dp(13);
+        int cr = titleTextView.getLeft() + titleW + dp(13);
+        int ct = titleTextView.getTop();
+        int cb = titleTextView.getBottom();
+        final View sub = getSubtitleTextView();
+        final boolean subtitleRow = sub != null && sub.getVisibility() != GONE && sub.getAlpha() > 0.1f;
+        if (subtitleRow) {
+            int subW = sub instanceof SimpleTextView ? ((SimpleTextView) sub).getTextWidth() : sub.getMeasuredWidth();
+            if (subW > 0) {
+                cb = Math.max(cb, sub.getBottom() + dp(6));
+                cl = Math.min(cl, sub.getLeft() - dp(13));
+                cr = Math.max(cr, sub.getLeft() + subW + dp(13));
+            }
+        }
         int screenW = width;
         final android.view.ViewParent parentView = getParent();
         if (parentView instanceof View) {
             screenW = ((View) parentView).getMeasuredWidth();
         }
-        final int titleX = (screenW - titleW) / 2;
-        int ct = titleTextTop - dp(6);
-        int cb = titleTextTop + titleTextView.getTextHeight() + dp(6);
-        int cl = titleX - dp(13);
-        int cr = titleX + titleW + dp(13);
-        if (subtitleRow && sub.getAlpha() > 0.1f) {
-            int subW = sub instanceof SimpleTextView ? ((SimpleTextView) sub).getTextWidth() : sub.getMeasuredWidth();
-            int subH = sub instanceof SimpleTextView ? ((SimpleTextView) sub).getTextHeight() : sub.getMeasuredHeight();
-            if (subW > 0 && subH > 0) {
-                int subX = (screenW - subW) / 2;
-                cb = Math.max(cb, subtitleTop + subH + dp(6));
-                cl = Math.min(cl, subX - dp(13));
-                cr = Math.max(cr, subX + subW + dp(13));
-            }
-        }
         cl = Math.max(dp(2), cl);
         cr = Math.min(screenW - dp(2), cr);
-        if (cr <= cl) {
+        if (cr <= cl || cb <= ct) {
             return;
         }
         iosTextCapsuleView.layout(cl, ct, cr, cb);

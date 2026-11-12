@@ -291,6 +291,7 @@ import org.telegram.ui.Components.ScaleStateListAnimator;
 import org.telegram.ui.Components.SeekSpeedDrawable;
 import org.telegram.ui.Components.ShareAlert;
 import org.telegram.ui.Components.SizeNotifierFrameLayoutPhoto;
+import org.telegram.ui.Components.OptionsSpeedIconDrawable;
 import org.telegram.ui.Components.SpeedIconDrawable;
 import org.telegram.ui.Components.StickersAlert;
 import org.telegram.ui.Components.TextViewSwitcher;
@@ -900,16 +901,13 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private TextView docInfoTextView;
     private TextView doneButtonFullWidth;
     private ActionBarMenuItem menuItem;
-    private ActionBarMenuItem videoItem;
+    private OptionsSpeedIconDrawable menuItemIcon;
     private ActionBarMenuSubItem allMediaItem;
-    private ActionBarMenuSlider.SpeedSlider speedItem;
+    private ActionBarMenuSubItem speedItem;
     private ActionBarMenuSubItem loopItem;
     private ActionBarMenuSubItem galleryButton;
     private ActionBarPopupWindow.GapView galleryGap;
-    private ActionBarMenuSubItem pipItem;
-    private ChooseQualityLayout.QualityIcon videoItemIcon;
-    private LinearLayout videoQualityLayout;
-    private final ArrayList<ActionBarMenuSubItem> videoQualityItems = new ArrayList<>();
+    private ActionBarMenuItem pipItem;
     private ActionBarPopupWindow.GapView speedGap;
     private ActionBarMenu menu;
     private ActionBarMenuItem sendItem;
@@ -921,8 +919,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private ActionBarMenuItem fastForwardItem;
     private Runnable fastForwardCallback;
     private LinearLayout itemsLayout;
-    private SpeedButtonsLayout chooseSpeedLayout;
-    private ChooseDownloadQualityLayout chooseDownloadQualityLayout;
+    private ChooseSpeedLayout chooseSpeedLayout;
     private Map<View, Boolean> actionBarItemsVisibility = new HashMap<>(3);
     private BackgroundDrawable backgroundDrawable = new BackgroundDrawable(0xff000000);
     private Paint blackPaint = new Paint();
@@ -1042,7 +1039,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         @Override
         public void run() {
             if (videoPlayerControlVisible && isPlaying && !ApplicationLoader.mainInterfacePaused) {
-                if (menuItem != null && menuItem.isSubMenuShowing() || videoItem != null && videoItem.isSubMenuShowing()) {
+                if (menuItem != null && menuItem.isSubMenuShowing()) {
                     return;
                 }
                 if (captionScrollView != null && captionScrollView.getScrollY() != 0) {
@@ -5809,6 +5806,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         setItemVisible(deleteItem, false, false);
         masksItem = menu.addItem(gallery_menu_masks, R.drawable.msg_mask);
         masksItem.setContentDescription(getString(R.string.Masks));
+        // Tele iOS: 11.1.3-style player – the PiP button is a flat icon in the
+        // top bar again instead of being buried in the 3-dot menu
+        pipItem = menu.addItem(gallery_menu_pip, R.drawable.ic_goinline);
+        pipItem.setContentDescription(getString(R.string.PipMinimize));
         editItem = menu.addItem(gallery_menu_paint, R.drawable.msg_header_draw);
         editItem.setContentDescription(getString(R.string.AccDescrPhotoEditor));
         sendItem = menu.addItem(gallery_menu_send, R.drawable.msg_header_share);
@@ -5816,67 +5817,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         fastForwardItem = menu.addItem(gallery_menu_fast_fwd, R.drawable.ic_ab_forward_anonym);
         fastForwardItem.setContentDescription(getString(R.string.FastForward));
 
-        videoItem = menu.addItem(gallery_menu_quality, videoItemIcon = new ChooseQualityLayout.QualityIcon(activityContext, R.drawable.video_settings, new DarkThemeResourceProvider()));
-        videoItemIcon.setCallback(videoItem.getIconView());
-        videoItem.getPopupLayout().setSwipeBackForegroundColor(0xff222222);
-        videoItem.getPopupLayout().swipeBackGravityRight = true;
-        videoItem.getPopupLayout().setFitItems(true);
-        videoItem.setMenuXOffset(dp(3));
-
-        speedItem = new ActionBarMenuSlider.SpeedSlider(activityContext, resourcesProvider);
-        speedItem.setStops(new float[]{0.5f, 1.0f, 1.5f, 2.0f, 2.5f});
-        speedItem.setMinimumWidth(AndroidUtilities.dp(196));
-        speedItem.setDrawShadow(false);
-        speedItem.setBackgroundColor(0xff222222);
-        speedItem.setTextColor(0xffffffff);
-        speedItem.setLabel(LocaleController.getString(R.string.VideoPlayerSpeed));
-        speedItem.setOnValueChange((value, isFinal) -> {
-            final float speed = ActionBarMenuSlider.SpeedSlider.MIN_SPEED + (ActionBarMenuSlider.SpeedSlider.MAX_SPEED - ActionBarMenuSlider.SpeedSlider.MIN_SPEED) * value;
-            chooseSpeed(speed, isFinal, false);
-        });
-        videoItem.getPopupLayout().addView(speedItem, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 44));
-        speedGap = videoItem.addColoredGap();
-        speedGap.setColor(0xff181818);
-        videoItem.getPopupLayout().addView(chooseSpeedLayout = new SpeedButtonsLayout(activityContext, this::chooseSpeed));
-        videoQualityLayout = new LinearLayout(activityContext);
-        videoQualityLayout.setOrientation(LinearLayout.VERTICAL);
-        videoItem.getPopupLayout().addView(videoQualityLayout);
-        loopItem = videoItem.addSubItem(gallery_menu_loop, R.drawable.menu_video_loop, LocaleController.getString(R.string.VideoPlayerLoop));
-        loopItem.setSelectorColor(0x0fffffff);
-        castItemButton = new CastMediaRouteButton(activityContext) {
-            @Override
-            public void stateUpdated(boolean connected) {
-                if (castItem != null) {
-                    castItem.setEnabledByColor(connected, 0xFFFFFFFF, 0xFF73B4EC);
-                    castItem.setSelectorColor(connected ? 0x0F73B4EC : 0x0fffffff);
-                }
-                if (videoPlayer != null) {
-                    videoPlayer.setMute(CastSync.isActive() || muteVideo);
-                }
-                if (videoItemIcon != null) {
-                    videoItemIcon.setCasting(CastSync.isActive(), true);
-                }
-            }
-        };
-        boolean castAvailable = true;
-        try {
-//            castItemButton.setRouteSelector(CastContext.getSharedInstance(activityContext).getMergedSelector());
-        } catch (Exception e) {
-            FileLog.e(e);
-            castAvailable = false;
-        }
-        castItemButton.setVisibility(View.INVISIBLE);
-        if (castAvailable) {
-            castItem = videoItem.addSubItem(gallery_menu_chromecast, R.drawable.menu_video_chromecast, getString(R.string.VideoPlayerChromecast));
-            castItem.setEnabledByColor(false, 0xFFFFFFFF, 0xFF73B4EC);
-            castItem.setSelectorColor(0x0fffffff);
-            castItem.addView(castItemButton, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-        }
-
-        videoItem.redrawPopup(0xf9222222);
-        videoItem.setOnMenuDismiss(byClick -> checkProgress(0, false, false));
-
-        menuItem = menu.addItem(0, R.drawable.media_more);
+        // Tele iOS: 11.1.3-style player – the gear/quality button is removed;
+        // speed lives in the 3-dot menu swipe submenu (old ChooseSpeedLayout),
+        // loop and chromecast moved to the 3-dot menu as regular items
+        menuItem = menu.addItem(0, menuItemIcon = new OptionsSpeedIconDrawable());
         menuItem.setContentDescription(getString(R.string.AccDescrMoreOptions));
         menuItem.setOnClickListener(v -> {
             if (currentMessageObject != null && currentMessageObject.isSponsored()) {
@@ -5891,9 +5835,46 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         menuItem.getPopupLayout().swipeBackGravityRight = true;
         menuItem.getPopupLayout().setFitItems(true);
 
-        chooseDownloadQualityLayout = new ChooseDownloadQualityLayout(activityContext, menuItem.getPopupLayout().getSwipeBack(), this::saveVideoQuality);
+        // Tele iOS: 11.1.3-style speed submenu – swipe page with the old
+        // ChooseSpeedLayout (vertical slider + preset rows 0.2x…2x)
+        chooseSpeedLayout = new ChooseSpeedLayout(activityContext, menuItem.getPopupLayout().getSwipeBack(), this::chooseSpeed);
+        speedItem = menuItem.addSwipeBackItem(R.drawable.msg_speed, null, getString(R.string.Speed), chooseSpeedLayout.speedSwipeBackLayout);
+        speedItem.setColors(0xfffafafa, 0xfffafafa);
+        speedItem.setSubtext(getString(R.string.SpeedNormal));
+        speedGap = menuItem.addColoredGap();
+        speedGap.setColor(0xff181818);
 
-        galleryButton = menuItem.addSwipeBackItem(R.drawable.msg_gallery, null, getString(R.string.SaveToGallery), chooseDownloadQualityLayout.layout).setColors(0xfffafafa, 0xfffafafa);
+        // Tele iOS: loop + chromecast live in the 3-dot menu now (the gear popup is gone)
+        loopItem = menuItem.addSubItem(gallery_menu_loop, R.drawable.menu_video_loop, getString(R.string.VideoPlayerLoop));
+        loopItem.setSelectorColor(0x0fffffff);
+        castItemButton = new CastMediaRouteButton(activityContext) {
+            @Override
+            public void stateUpdated(boolean connected) {
+                if (castItem != null) {
+                    castItem.setEnabledByColor(connected, 0xFFFFFFFF, 0xFF73B4EC);
+                    castItem.setSelectorColor(connected ? 0x0F73B4EC : 0x0fffffff);
+                }
+                if (videoPlayer != null) {
+                    videoPlayer.setMute(CastSync.isActive() || muteVideo);
+                }
+            }
+        };
+        boolean castAvailable = true;
+        try {
+//            castItemButton.setRouteSelector(CastContext.getSharedInstance(activityContext).getMergedSelector());
+        } catch (Exception e) {
+            FileLog.e(e);
+            castAvailable = false;
+        }
+        castItemButton.setVisibility(View.INVISIBLE);
+        if (castAvailable) {
+            castItem = menuItem.addSubItem(gallery_menu_chromecast, R.drawable.menu_video_chromecast, getString(R.string.VideoPlayerChromecast));
+            castItem.setEnabledByColor(false, 0xFFFFFFFF, 0xFF73B4EC);
+            castItem.setSelectorColor(0x0fffffff);
+            castItem.addView(castItemButton, 0, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        }
+
+        galleryButton = menuItem.addSubItem(gallery_menu_save, R.drawable.msg_gallery, getString(R.string.SaveToGallery)).setColors(0xfffafafa, 0xfffafafa);
         galleryButton.setOnClickListener(v -> {
             // Tele iOS: saving always takes the best available quality
             // (Original/Source first) – no quality list is shown
@@ -5909,7 +5890,6 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         galleryGap = menuItem.addColoredGap();
         galleryGap.setColor(0xff181818);
         menuItem.addSubItem(gallery_menu_openin, R.drawable.msg_openin, getString(R.string.OpenInExternalApp)).setColors(0xfffafafa, 0xfffafafa);
-        pipItem = menuItem.addSubItem(gallery_menu_pip, R.drawable.menu_video_pip, getString(R.string.PipMinimize)).setColors(0xfffafafa, 0xfffafafa);
         allMediaItem = menuItem.addSubItem(gallery_menu_showall, R.drawable.msg_media, getString(R.string.ShowAllMedia));
         allMediaItem.setColors(0xfffafafa, 0xfffafafa);
         menuItem.addSubItem(gallery_menu_savegif, R.drawable.msg_gif, getString(R.string.SaveToGIFs)).setColors(0xfffafafa, 0xfffafafa);
@@ -6697,12 +6677,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         muteButton.setScaleType(ImageView.ScaleType.CENTER);
         muteButton.setImageDrawable(muteDrawable = new MuteDrawable(parentActivity));
         muteButton.setColorFilter(new PorterDuffColorFilter(0xFFFFFFFF, PorterDuff.Mode.SRC_IN));
-        muteButton.setBackground(iBlur3FactoryFrostedLiquidGlass.create(muteButton)
-            .setColorProvider(BlurredBackgroundProviderImpl.photoViewer(null))
-            .setPadding(dp(4))
-            .setRadius(dp(16)));
-        ScaleStateListAnimator.apply(muteButton);
-        containerView.addView(muteButton, LayoutHelper.createFrame(40, 40, Gravity.LEFT | Gravity.BOTTOM, 8, 0, 0, -4));
+        // Tele iOS: 11.1.3-style flat mute button – a simple white selector on
+        // the video, no glass circle around it
+        muteButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR));
+        containerView.addView(muteButton, LayoutHelper.createFrame(48, 48, Gravity.LEFT | Gravity.BOTTOM, 16, 0, 0, 0));
         muteButton.setOnClickListener(v -> {
             if (isCaptionOpen()) {
                 return;
@@ -8537,16 +8515,28 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     }
 
     private void setMenuItemIcon(boolean animated, boolean isFinal) {
-        if (speedItem.getVisibility() != View.VISIBLE) {
-            videoItemIcon.topText.setText("", animated);
-        } else {
-            if (Math.abs(currentVideoSpeed - 1f) < 0.001f) {
-                videoItemIcon.topText.setText("", animated);
+        // Tele iOS: 11.1.3-style – the 3-dot icon morphs into the current speed
+        // and the Speed row subtext shows the active preset
+        if (speedItem == null || speedItem.getVisibility() != View.VISIBLE) {
+            menuItemIcon.setSpeed(null, animated);
+            return;
+        }
+        menuItemIcon.setSpeed(Math.abs(currentVideoSpeed - 1f) < 0.001f ? null : currentVideoSpeed, animated);
+        if (isFinal) {
+            if (Math.abs(currentVideoSpeed - 0.2f) < 0.05f) {
+                speedItem.setSubtext(getString("VideoSpeedVerySlow", R.string.VideoSpeedVerySlow));
+            } else if (Math.abs(currentVideoSpeed - 0.5f) < 0.05f) {
+                speedItem.setSubtext(getString("VideoSpeedSlow", R.string.VideoSpeedSlow));
+            } else if (Math.abs(currentVideoSpeed - 1.0f) < 0.05f) {
+                speedItem.setSubtext(getString("VideoSpeedNormal", R.string.VideoSpeedNormal));
+            } else if (Math.abs(currentVideoSpeed - 1.5f) < 0.05f) {
+                speedItem.setSubtext(getString("VideoSpeedFast", R.string.VideoSpeedFast));
+            } else if (Math.abs(currentVideoSpeed - 2f) < 0.05f) {
+                speedItem.setSubtext(getString("VideoSpeedVeryFast", R.string.VideoSpeedVeryFast));
             } else {
-                videoItemIcon.topText.setText(SpeedIconDrawable.formatNumber(currentVideoSpeed) + "x", animated);
+                speedItem.setSubtext(LocaleController.formatString("VideoSpeedCustom", R.string.VideoSpeedCustom, SpeedIconDrawable.formatNumber(currentVideoSpeed) + "x"));
             }
         }
-        speedItem.setSpeed(currentVideoSpeed, animated);
         chooseSpeedLayout.update(currentVideoSpeed, isFinal);
     }
 
@@ -8560,7 +8550,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             VideoPlayer.saveQuality(videoPlayer.getQuality(qualityIndex), currentMessageObject);
         }
         updateQualityItems();
-        videoItem.toggleSubMenu();
+        menuItem.toggleSubMenu();
         try {
             CastSync.check(CastSync.TYPE_PHOTOVIEWER);
             //if (ChromecastController.getInstance().isCasting()) {
@@ -8620,17 +8610,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
     private int lastQualityIndexSelected;
     private void updateQualityItems() {
-        // Tele iOS: the player has no quality menu, no quality label and no
-        // quality picker when saving – every video plays and saves its best
-        // available quality (Original/Source first) fully automatically.
-        // The speed slider stays visible exactly like on single-quality videos.
-        videoQualityLayout.setVisibility(View.GONE);
-        videoQualityItems.clear();
-        chooseSpeedLayout.setVisibility(View.VISIBLE);
-        galleryButton.setRightIcon(0);
-        if (videoItemIcon != null) {
-            videoItemIcon.bottomText.setText("", true);
-        }
+        // Tele iOS: the player has no quality menu and no quality picker when
+        // saving – every video plays and saves its best available quality
+        // (Original/Source first) fully automatically. 11.1.3-style: nothing
+        // to update here, the speed UI lives in the 3-dot menu.
         lastQualityIndexSelected = -1;
         if (videoPreviewFrame != null && currentMessageObject != null && videoPlayer != null) {
             videoPreviewFrame.open(currentMessageObject, videoPlayer);
@@ -8639,217 +8622,6 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
 
     // Tele iOS: legacy quality-list builder, intentionally unused
     @SuppressWarnings("unused")
-    private void updateQualityItemsLegacyUnused() {
-        if (videoPlayer == null || videoPlayer.getQualitiesCount() <= 1) {
-            videoQualityLayout.setVisibility(View.GONE);
-            chooseSpeedLayout.setVisibility(View.VISIBLE);
-//            videoItem.setVisibility(View.GONE);
-            galleryButton.setRightIcon(0);
-            videoItemIcon.bottomText.setText("", true);
-            lastQualityIndexSelected = -1;
-            return;
-        }
-        galleryButton.setRightIcon(R.drawable.msg_arrowright);
-//        videoItem.setVisibility(View.VISIBLE);
-        chooseSpeedLayout.setVisibility(View.GONE);
-        videoQualityLayout.setVisibility(View.VISIBLE);
-        final VideoPlayer.Quality currentQuality = videoPlayer.getCurrentQuality();
-        final int qualityIndexSelected = videoPlayer.getCurrentQualityIndex();
-        if (1 + videoPlayer.getQualitiesCount() != videoQualityItems.size()) {
-            videoQualityLayout.removeAllViews();
-            videoQualityItems.clear();
-
-            final TextView header = new TextView(activityContext);
-            header.setText(getString(R.string.QualityList));
-            header.setTypeface(AndroidUtilities.bold());
-            header.setPadding(dp(16), dp(9), dp(16), dp(8));
-            header.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-            header.setTextColor(0xFFFFFFFF);
-            videoQualityLayout.addView(header, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            for (int i = -1; i < videoPlayer.getQualitiesCount(); ++i) {
-                SpannableStringBuilder title = new SpannableStringBuilder();
-                VideoPlayer.Quality q;
-                boolean visible = true;
-                if (i == -1) {
-                    q = null;
-                    title.append(LocaleController.getString(R.string.QualityAuto));
-                    if (i == videoPlayer.getSelectedQuality() && currentQuality != null) {
-                        q = currentQuality;
-                        title.append(" ");
-                        int start = title.length();
-                        if (SharedConfig.debugVideoQualities) {
-                            title.append(Integer.toString(q.width)).append("x").append(Integer.toString(q.height));
-                        } else {
-                            title.append(String.valueOf(q.p())).append("p");
-                        }
-                        title.setSpan(new ForegroundColorSpan(Theme.multAlpha(0xFFFFFFFF, .5f)), start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    }
-                } else {
-                    q = videoPlayer.getQuality(i);
-                    if (q.original) {
-                        title.append(LocaleController.getString(R.string.QualityOriginal));
-//                        if (i != videoPlayer.getSelectedQuality() && videoPlayer.getQualitiesCount() >= 2 && (q.uris.isEmpty() || !q.uris.get(0).isCached())) {
-//                            visible = false;
-//                        }
-                    } else if (q.p() >= 2000) {
-                        title.append(LocaleController.getString(R.string.Quality2160));
-                    } else if (q.p() >= 1400) {
-                        title.append(LocaleController.getString(R.string.Quality1440));
-                    } else if (q.p() >= 1000) {
-                        title.append(LocaleController.getString(R.string.Quality1080));
-                    } else if (q.p() >= 700) {
-                        title.append(LocaleController.getString(R.string.Quality720));
-                    } else if (q.p() >= 400) {
-                        title.append(LocaleController.getString(R.string.Quality480));
-                    } else if (q.p() >= 340) {
-                        title.append(LocaleController.getString(R.string.Quality360));
-                    } else if (q.p() >= 200) {
-                        title.append(LocaleController.getString(R.string.Quality240));
-                    } else {
-                        title.append(LocaleController.getString(R.string.Quality144));
-                    }
-                    title.append(" ");
-                    int start = title.length();
-                    if (SharedConfig.debugVideoQualities) {
-                        title.append(Integer.toString(q.width)).append("x").append(Integer.toString(q.height));
-                    } else {
-                        title.append(String.valueOf(q.p())).append("p");
-                    }
-                    title.setSpan(new ForegroundColorSpan(Theme.multAlpha(0xFFFFFFFF, .5f)), start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                }
-                ActionBarMenuSubItem item = ActionBarMenuItem.addItem(videoQualityLayout, 0, title, true, null);
-                if (SharedConfig.debugVideoQualities && q != null) {
-                    StringBuilder subtext = new StringBuilder();
-                    for (VideoPlayer.VideoUri uri : q.uris) {
-                        if (subtext.length() > 0) subtext.append("\n");
-                        if (!TextUtils.isEmpty(uri.codec)) subtext.append(uri.codec).append(", ");
-                        subtext.append(AndroidUtilities.formatFileSize(uri.size).replace(" ", "")).append("(");
-                        subtext.append(AndroidUtilities.formatFileSize((long) uri.bitrate).replace(" ", "") + "/s)");
-                        subtext.append(uri.isManifestCached() ? "!" : " ").append(uri.isCached() ? "!" : " ");
-                    }
-                    item.setSubtext(subtext.toString());
-                } else {
-                    item.setSubtext("");
-                }
-                item.setChecked(i == videoPlayer.getSelectedQuality());
-                item.setColors(0xfffafafa, 0xfffafafa);
-                final int index = i;
-                item.setVisibility(visible ? View.VISIBLE : View.GONE);
-                item.setOnClickListener((view) -> {
-                    chooseQuality(index);
-                });
-                item.setSelectorColor(0x0fffffff);
-                videoQualityItems.add(item);
-            }
-            ActionBarPopupWindow.GapView gap = new ActionBarPopupWindow.GapView(activityContext, resourcesProvider, Theme.key_actionBarDefaultSubmenuSeparator);
-            gap.setTag(R.id.fit_width_tag, 1);
-            gap.setColor(0xff181818);
-            videoQualityLayout.addView(gap, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 8));
-        } else {
-            for (int i = -1; i < videoPlayer.getQualitiesCount(); ++i) {
-                ActionBarMenuSubItem item = videoQualityItems.get(i + 1);
-                SpannableStringBuilder title = new SpannableStringBuilder();
-                VideoPlayer.Quality q;
-                boolean visible = true;
-                if (i == -1) {
-                    q = null;
-                    title.append(LocaleController.getString(R.string.QualityAuto));
-                    if (i == videoPlayer.getSelectedQuality() && currentQuality != null) {
-                        q = currentQuality;
-                        title.append(" ");
-                        int start = title.length();
-                        if (SharedConfig.debugVideoQualities) {
-                            title.append(Integer.toString(q.width)).append("x").append(Integer.toString(q.height));
-                        } else {
-                            title.append(String.valueOf(q.p())).append("p");
-                        }
-                        title.setSpan(new ForegroundColorSpan(Theme.multAlpha(0xFFFFFFFF, .5f)), start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    }
-                } else {
-                    q = videoPlayer.getQuality(i);
-                    if (q.original) {
-                        title.append(LocaleController.getString(R.string.QualityOriginal));
-//                        if (i != videoPlayer.getSelectedQuality() && videoPlayer.getQualitiesCount() >= 2 && (q.uris.isEmpty() || !q.uris.get(0).isCached())) {
-//                            visible = false;
-//                        }
-                    } else if (q.p() >= 2000) {
-                        title.append(LocaleController.getString(R.string.Quality2160));
-                    } else if (q.p() >= 1400) {
-                        title.append(LocaleController.getString(R.string.Quality1440));
-                    } else if (q.p() >= 1000) {
-                        title.append(LocaleController.getString(R.string.Quality1080));
-                    } else if (q.p() >= 700) {
-                        title.append(LocaleController.getString(R.string.Quality720));
-                    } else if (q.p() >= 400) {
-                        title.append(LocaleController.getString(R.string.Quality480));
-                    } else if (q.p() >= 340) {
-                        title.append(LocaleController.getString(R.string.Quality360));
-                    } else if (q.p() >= 200) {
-                        title.append(LocaleController.getString(R.string.Quality240));
-                    } else {
-                        title.append(LocaleController.getString(R.string.Quality144));
-                    }
-                    title.append(" ");
-                    int start = title.length();
-                    if (SharedConfig.debugVideoQualities) {
-                        title.append(Integer.toString(q.width)).append("x").append(Integer.toString(q.height));
-                    } else {
-                        title.append(String.valueOf(q.p())).append("p");
-                    }
-                    title.setSpan(new ForegroundColorSpan(Theme.multAlpha(0xFFFFFFFF, .5f)), start, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                }
-                item.setText(title);
-                item.setVisibility(visible ? View.VISIBLE : View.GONE);
-                if (SharedConfig.debugVideoQualities && q != null) {
-                    StringBuilder subtext = new StringBuilder();
-                    for (VideoPlayer.VideoUri uri : q.uris) {
-                        if (subtext.length() > 0) subtext.append("\n");
-                        if (!TextUtils.isEmpty(uri.codec)) subtext.append(uri.codec).append(", ");
-                        subtext.append(AndroidUtilities.formatFileSize(uri.size).replace(" ", "")).append(" (");
-                        subtext.append(AndroidUtilities.formatFileSize((long) uri.bitrate).replace(" ", "") + "/s)");
-                        subtext.append(uri.isManifestCached() ? "!" : " ").append(uri.isCached() ? "!" : " ");
-                    }
-                    item.setSubtext(subtext.toString());
-                } else {
-                    item.setSubtext("");
-                }
-                item.setChecked(i == videoPlayer.getSelectedQuality());
-                final int index = i;
-                item.setOnClickListener((view) -> {
-                    chooseQuality(index);
-                });
-            }
-        }
-        String t = "";
-        if (currentQuality != null) {
-            if (currentQuality.p() >= 2000) {
-                t = LocaleController.getString(R.string.Quality2160Short);
-            } else if (currentQuality.p() >= 1000) {
-                t = LocaleController.getString(R.string.Quality1080Short);
-            } else if (currentQuality.p() >= 700) {
-                t = LocaleController.getString(R.string.Quality720Short);
-            } else {
-                t = currentQuality.p() + "p";
-            }
-        }
-        videoItemIcon.bottomText.setText(t, true);
-        if (videoPreviewFrame != null && currentMessageObject != null && videoPlayer != null) {
-            videoPreviewFrame.open(currentMessageObject, videoPlayer);
-        }
-        if (lastQualityIndexSelected != qualityIndexSelected) {
-            try {
-                CastSync.check(CastSync.TYPE_PHOTOVIEWER);
-                //if (ChromecastController.getInstance().isCasting()) {
-                //    ChromecastController.getInstance().setCurrentMediaAndCastIfNeeded(getCurrentChromecastMedia());
-                //}
-                if (videoPlayer != null) {
-                    CastSync.setPlaying(videoPlayer.isPlaying());
-                }
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
-        }
-    }
 
     public float getCurrentVideoSpeed() {
         return currentVideoSpeed;
@@ -14413,7 +14185,6 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         menuItem.hideSubItem(gallery_menu_cancel_loading);
         speedItem.setVisibility(View.GONE);
         speedGap.setVisibility(View.GONE);
-        videoItem.setVisibility(View.GONE);
         actionBar.setTranslationY(0);
         dialogPhotos = null;
 
@@ -15056,7 +14827,6 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     menuItem.checkHideMenuItem();
                 } else {
                     speedItem.setVisibility(View.GONE);
-                    videoItem.setVisibility(View.GONE);
                     speedGap.setVisibility(View.GONE);
                     menuItem.hideSubItem(gallery_menu_openin);
                     menuItem.checkHideMenuItem();
@@ -16129,13 +15899,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             }
             if (isVideo && !isLivePhoto || isEmbedVideo) {
                 speedItem.setVisibility(View.VISIBLE);
-                videoItem.setVisibility(View.VISIBLE);
                 menuItem.showSubItem(gallery_menu_speed);
                 menuItem.setSubItemShown(gallery_menu_create_sticker, false);
                 speedGap.setVisibility(menuItem.getVisibleSubItemsCount() > 1 ? View.VISIBLE : View.GONE);
             } else {
                 speedItem.setVisibility(View.GONE);
-                videoItem.setVisibility(View.GONE);
                 speedGap.setVisibility(View.GONE);
                 menuItem.setSubItemShown(gallery_menu_create_sticker, !noforwards && currentMessageObject != null && currentMessageObject.isPhoto() && !currentMessageObject.isLivePhoto());
                 menuItem.checkHideMenuItem();
@@ -23683,7 +23451,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         }
         setMenuItemIcon(true, isFinal);
         if (closeMenu) {
-            videoItem.toggleSubMenu();
+            menuItem.toggleSubMenu();
         }
     }
 
@@ -23858,9 +23626,6 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 }
             }
             chooseSpeed(CastSync.getSpeed(), true, false);
-        }
-        if (videoItemIcon != null) {
-            videoItemIcon.setCasting(CastSync.isActive(), true);
         }
 
         ignorePlayerUpdate = false;

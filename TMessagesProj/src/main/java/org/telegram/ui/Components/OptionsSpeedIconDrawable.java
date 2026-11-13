@@ -89,14 +89,16 @@ public class OptionsSpeedIconDrawable extends Drawable {
 
         int cx = getBounds().centerX(), cy = getBounds().centerY();
 
-        canvas.drawCircle(cx, cy - dpf2(6), dpf2(2), paint);
+        // Tele iOS: iOS-style horizontal dots
+        canvas.drawCircle(cx - dpf2(6), cy, dpf2(2), paint);
         canvas.drawCircle(cx, cy, dpf2(2), paint);
-        canvas.drawCircle(cx, cy + dpf2(6), dpf2(2), paint);
+        canvas.drawCircle(cx + dpf2(6), cy, dpf2(2), paint);
 
         if (textDrawable != null) {
             canvas.save();
 
-            int tcx = cx - dp(11.6f), tcy = cy + dp(4);
+            // Tele iOS: keep the speed pill clear of the (now horizontal) dots
+            int tcx = cx - dp(13.5f), tcy = cy + dp(4);
 
             float alpha = textDrawableAlpha.set(textDrawableVisible ? 1 : 0);
             int wasAlpha = paint.getAlpha();

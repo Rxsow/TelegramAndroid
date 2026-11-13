@@ -3725,6 +3725,15 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             this.container = container;
         }
 
+        // Tele iOS: keep both caption views in sync with the chat font size setting
+        public void updateFontSize() {
+            for (int i = 0; i < getChildCount(); ++i) {
+                if (getChildAt(i) instanceof CaptionTextView) {
+                    ((CaptionTextView) getChildAt(i)).updateFontSize();
+                }
+            }
+        }
+
         @Override
         public void setVisibility(int visibility) {
             setVisibility(visibility, true);
@@ -8706,12 +8715,18 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             setTextColor(0xffffffff);
             setHighlightColor(0x33ffffff);
             setGravity(Gravity.CENTER_VERTICAL | LayoutHelper.getAbsoluteGravityStart());
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+            // Tele iOS: caption follows the user's chat font size setting
+            updateFontSize();
             setOnClickListener((v) -> {
                 if (scrollView != null) {
                     scrollView.smoothScrollBy(0, dp(64));
                 }
             });
+        }
+
+        // Tele iOS: caption text size follows the chat font size setting
+        public void updateFontSize() {
+            setTextSize(TypedValue.COMPLEX_UNIT_DIP, SharedConfig.fontSize);
         }
 
         @Override
@@ -16356,6 +16371,9 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         final boolean isCurrentCaptionEmpty = TextUtils.isEmpty(captionTextViewSwitcher.getCurrentView().getText());
 
         TextView captionTextView = animated ? captionTextViewSwitcher.getNextView() : captionTextViewSwitcher.getCurrentView();
+
+        // Tele iOS: keep the caption size in sync with the chat font size setting
+        captionTextViewSwitcher.updateFontSize();
 
         if (isCurrentVideo) {
             if (captionTextView.getMaxLines() != 1) {

@@ -20760,6 +20760,41 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     }
 
 
+    // Tele iOS: resolves the on-disk file of a video document – the regular
+    // media directory (through the file database) first, then the cache.
+    // Manifests and storyboard files are never treated as a playable download.
+    private File resolveDownloadedVideoFile(TLRPC.Document document) {
+        if (document == null || document.size <= 0) {
+            return null;
+        }
+        final String mime = document.mime_type != null ? document.mime_type : "";
+        if ("application/x-mpegurl".equalsIgnoreCase(mime) || mime.startsWith("application/x-tgstoryboard")) {
+            return null;
+        }
+        File file = FileLoader.getInstance(currentAccount).getPathToAttach(document, false);
+        if (file != null && file.exists()) {
+            return file;
+        }
+        file = FileLoader.getInstance(currentAccount).getPathToAttach(document, true);
+        if (file != null && file.exists()) {
+            return file;
+        }
+        return null;
+    }
+
+    private static long videoDocumentPixels(TLRPC.Document document) {
+        if (document == null || document.attributes == null) {
+            return 0;
+        }
+        for (int i = 0; i < document.attributes.size(); ++i) {
+            TLRPC.DocumentAttribute attribute = document.attributes.get(i);
+            if (attribute instanceof TLRPC.TL_documentAttributeVideo) {
+                return (long) ((TLRPC.TL_documentAttributeVideo) attribute).w * ((TLRPC.TL_documentAttributeVideo) attribute).h;
+            }
+        }
+        return 0;
+    }
+
     private void onActionClick(boolean download) {
         if (currentMessageObject == null && currentBotInlineResult == null && (pageBlocksAdapter == null || currentFileNames[0] == null) && sendPhotoType != SELECT_TYPE_NO_SELECT) {
             return;
@@ -20799,6 +20834,31 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                         } else if (alt_documents.size() == 1) {
                             file = FileLoader.getInstance(currentAccount).getPathToAttach(alt_documents.get(0), true);
                         }
+                    }
+                }
+                // Tele iOS: for videos with several qualities the lookup above is
+                // skipped, so a fully downloaded video was streamed (downloaded
+                // again) while watching. Check for any downloaded version on disk
+                // – the original first, then the highest-resolution downloaded
+                // alternative – and always play it straight from the local file.
+                if (file == null && currentMessageObject.isVideo()) {
+                    File downloadedVersion = resolveDownloadedVideoFile(original);
+                    if (downloadedVersion == null && !alt_documents.isEmpty()) {
+                        long bestPixels = -1;
+                        for (int i = 0; i < alt_documents.size(); ++i) {
+                            final TLRPC.Document alt = alt_documents.get(i);
+                            final File altFile = resolveDownloadedVideoFile(alt);
+                            if (altFile != null) {
+                                final long pixels = videoDocumentPixels(alt);
+                                if (pixels > bestPixels) {
+                                    bestPixels = pixels;
+                                    downloadedVersion = altFile;
+                                }
+                            }
+                        }
+                    }
+                    if (downloadedVersion != null) {
+                        file = downloadedVersion;
                     }
                 }
                 if (file == null || !file.exists()) {
@@ -20886,6 +20946,12 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 return;
             }
             preparePlayer(videoUrises, uri, true, false, currentMessageObject != null && currentMessageObject.isLivePhoto());
+            if (videoUrises != null && videoPlayer != null) {
+                // Tele iOS: keep the streaming state in sync with what the player
+                // actually plays – a locally cached rendition is not a stream, so
+                // the UI must not show buffering/zero-buffer streaming indicators
+                isStreaming = videoPlayer.isStreaming();
+            }
             videoSizeSet = true;
         }
     }

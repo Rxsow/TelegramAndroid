@@ -756,6 +756,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             if (forceAdaptiveHls) {
                 // Tele iOS: the pinned best-quality source failed to start earlier
                 // – play the classic adaptive HLS manifest so the video still works
+                isStreaming = true;
                 final Uri hlsManifest = makeManifest(videoQualities);
                 if (hlsManifest != null) {
                     autoIsOriginal = false;
@@ -791,6 +792,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             }
             if (target == null || target.uris.isEmpty()) {
                 // no directly playable version at all – last resort: adaptive HLS
+                isStreaming = true;
                 final Uri hlsManifest = makeManifest(videoQualities);
                 if (hlsManifest != null) {
                     autoIsOriginal = false;
@@ -810,9 +812,14 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 }
                 if (chosen.isCached()) {
                     currentStreamIsHls = false;
+                    // Tele iOS: a cached rendition is played from the local file –
+                    // this is not a stream anymore, so buffered indicators and the
+                    // streaming UI must be switched off
+                    isStreaming = false;
                     player.setMediaSource(mediaSourceFromUri(chosen, "other"), false);
                     reset = true;
                 } else {
+                    isStreaming = true;
                     Uri singleRendition = null;
                     if (chosen.m3u8uri != null) {
                         // HLS transport kept for a fast start, but the manifest
@@ -833,6 +840,9 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         } else {
             autoIsOriginal = false;
             if (quality.uris.isEmpty()) return;
+            // Tele iOS: whether a downloaded local file or a network rendition is
+            // actually being played decides the streaming state of the player
+            isStreaming = !quality.getDownloadUri().isCached();
             Uri hlsManifest = null;
             if (quality.uris.size() > 1) {
                 hlsManifest = makeManifest(videoQualities);
@@ -844,6 +854,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
             } else {
                 if (!currentStreamIsHls) {
                     currentStreamIsHls = true;
+                    isStreaming = true;
                     player.setMediaSource(mediaSourceFromUri(hlsManifest, 0, "hls"), false);
                     reset = true;
                 }

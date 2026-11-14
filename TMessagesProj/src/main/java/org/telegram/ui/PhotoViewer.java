@@ -193,6 +193,7 @@ import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.camera.Size;
 import org.telegram.messenger.forkgram.ForkOfflineTranscribe;
 import org.telegram.messenger.forkgram.ForkVideoSubtitles;
+import org.telegram.messenger.forkgram.ModFont;
 import org.telegram.messenger.forkgram.PhotoCollage;
 import org.telegram.messenger.forkgram.SubtitleSegment;
 //import org.telegram.messenger.chromecast.ChromecastController;
@@ -8724,9 +8725,13 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             });
         }
 
-        // Tele iOS: caption text size follows the chat font size setting
+        // Tele iOS: caption follows the chat font size setting and the custom (Mod) font
         public void updateFontSize() {
             setTextSize(TypedValue.COMPLEX_UNIT_DIP, SharedConfig.fontSize);
+            // chat messages take the custom font explicitly via ModFont.override(null)
+            // (Theme.createCommonMessageResources) – do the same here so the caption
+            // renders with the user's font even when the system-wide replacement fails
+            setTypeface(ModFont.override(null));
         }
 
         @Override

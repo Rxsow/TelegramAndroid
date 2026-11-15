@@ -6,7 +6,10 @@ import static org.telegram.messenger.AndroidUtilities.lerp;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -66,7 +69,6 @@ public class MainTabsLayout extends AnimatedLinearLayout {
         }
 
         final int maxTotalWidthForTabs = width - getPaddingLeft() - getPaddingRight();
-        final int minTotalWidthForTabs = Math.min(dp(320), maxTotalWidthForTabs);
 
         int chosenPass = PASS_TEXT_SIZES_DP.length - 1;
         float lastMeasuredTextSize = -1;
@@ -91,56 +93,24 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
         applyPassTextSize(chosenPass);
 
-        final int tabPadding = dp(PASS_PADDINGS_DP[chosenPass]);
-        final int maxTabTextWidthIfEq = (maxTotalWidthForTabs / Math.max(1, visibleChildCount)) - tabPadding * 2;
+        // Tele iOS: distribute all visible tabs evenly across the full bar width (iOS-style tab bar)
+        final int equalWidth = Math.max(dp(56), maxTotalWidthForTabs / Math.max(1, visibleChildCount));
 
-        float totalWidth = 0;
-        int totalWeight = 0;
+        int l = 0;
         for (int a = 0, N = getChildCount(); a < N; a++) {
             final View child = getChildAt(a);
             if (!isViewVisible(child)) {
                 tabsTextWidth[a] = tabsTextWidthWithMargin[a] = 0;
                 tabsWeight[a] = 0;
+                tabsWidth[a] = 0;
                 continue;
             }
 
-            tabsTextWidthWithMargin[a] = tabsTextWidth[a] + tabPadding * 2;
-            tabsWeight[a] = tabsTextWidthWithMargin[a] > (maxTabTextWidthIfEq + tabPadding * 2) ? 0 : 1;
-
-            totalWidth += tabsTextWidthWithMargin[a];
-            totalWeight += tabsWeight[a];
-        }
-
-        if (totalWeight == 0) {
-            for (int a = 0, N = getChildCount(); a < N; a++) {
-                tabsWeight[a] = isViewVisible(getChildAt(a)) ? 1 : 0;
-            }
-            totalWeight = visibleChildCount;
-        }
-
-        if (totalWidth > maxTotalWidthForTabs) {
-            final float m = maxTotalWidthForTabs / totalWidth;
-            for (int a = 0, N = getChildCount(); a < N; a++) {
-                tabsTextWidthWithMargin[a] *= m;
-            }
-        } else if (totalWidth < minTotalWidthForTabs) {
-            final float growW = minTotalWidthForTabs - totalWidth;
-            final float growP = growW / totalWeight;
-
-            for (int a = 0, N = getChildCount(); a < N; a++) {
-                tabsTextWidthWithMargin[a] += growP * tabsWeight[a];
-            }
-        }
-
-        int l = 0;
-        for (int a = 0, N = getChildCount(); a < N; a++) {
-            if (!isViewVisible(getChildAt(a))) {
-                continue;
-            }
-
-            tabsWidth[a] = Math.round(tabsTextWidthWithMargin[a]);
+            tabsTextWidthWithMargin[a] = equalWidth;
+            tabsWeight[a] = 1;
+            tabsWidth[a] = equalWidth;
             tabsLeftPos[a] = l;
-            l += tabsWidth[a];
+            l += equalWidth;
         }
         setMeasuredDimension(l + getPaddingLeft() + getPaddingRight(), height);
         for (int a = 0, N = getChildCount(); a < N; a++) {
@@ -232,6 +202,16 @@ public class MainTabsLayout extends AnimatedLinearLayout {
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
         checkVisualWidth();
+        // Tele iOS: keep the bubble aligned with the selected tab after layout changes
+        if (!isInLongPress) {
+            final View selected = findSelectedTab();
+            if (selected != null && selected.getWidth() > 0) {
+                selectedTabPositionX.cancel();
+                animatedLongSelectedViewCenterX = selected.getX() + selected.getWidth() / 2f;
+                animatedLongSelectedViewOffsetX = 0;
+                bubbleInit = true;
+            }
+        }
     }
 
     @Override
@@ -262,6 +242,24 @@ public class MainTabsLayout extends AnimatedLinearLayout {
                 ((GlassTabView) child).setSelected(child == tab, animated);
             }
         }
+        // Tele iOS: slide the glass bubble to the selected tab
+        if (!isInLongPress && tab != null && tab.getVisibility() == View.VISIBLE) {
+            lastLongSelectedView = null;
+            final float cx = tab.getX() + tab.getWidth() / 2f;
+            if (!bubbleInit) {
+                bubbleInit = true;
+                selectedTabPositionX.cancel();
+                animatedLongSelectedViewCenterX = cx;
+                animatedLongSelectedViewOffsetX = 0;
+            } else if (animated) {
+                selectedTabPositionX.animateToFinalPosition(cx);
+            } else {
+                selectedTabPositionX.cancel();
+                animatedLongSelectedViewCenterX = cx;
+                animatedLongSelectedViewOffsetX = 0;
+            }
+        }
+        invalidate();
     }
 
     private View findSelectedTab() {
@@ -285,9 +283,6 @@ public class MainTabsLayout extends AnimatedLinearLayout {
     private boolean drawCustomSelector;
     private void setSkipDrawSelector(boolean skipDrawSelector) {
         drawCustomSelector = skipDrawSelector;
-        if (drawCustomSelector) {
-            selectorPaint.setColor(Theme.multAlpha(Theme.getColor(Theme.key_glass_tabSelected, resourcesProvider), 0.09f));
-        }
         for (int a = 0, N = getChildCount(); a < N; a++) {
             final View child = getChildAt(a);
             if (child.getVisibility() != View.VISIBLE) {
@@ -307,24 +302,68 @@ public class MainTabsLayout extends AnimatedLinearLayout {
 
 
 
+    // Tele iOS: glass bubble that slides under the selected tab
+    private static final float BUBBLE_INSET_DP = 3.33f;
+    private final Paint bubbleFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bubbleStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private LinearGradient bubbleGradient;
+    private int bubbleGradientHeight = -1;
+    private boolean bubbleInit;
+
+    private void ensureBubblePaints(float height) {
+        final int h = (int) height;
+        if (bubbleGradient == null || bubbleGradientHeight != h) {
+            bubbleGradientHeight = h;
+            bubbleGradient = new LinearGradient(
+                0, 0, 0, h,
+                Theme.multAlpha(Color.WHITE, 0.24f),
+                Theme.multAlpha(Color.WHITE, 0.08f),
+                Shader.TileMode.CLAMP);
+            bubbleFillPaint.setShader(bubbleGradient);
+            bubbleStrokePaint.setStyle(Paint.Style.STROKE);
+            bubbleStrokePaint.setStrokeWidth(dp(1));
+            bubbleStrokePaint.setColor(Theme.multAlpha(Color.WHITE, 0.28f));
+        }
+    }
+
+    private void drawSelectionBubble(Canvas canvas) {
+        if (!bubbleInit) {
+            return;
+        }
+        final View selected = findSelectedTab();
+        if (selected == null) {
+            return;
+        }
+        final float cx = animatedLongSelectedViewCenterX + animatedLongSelectedViewOffsetX;
+        final float width = getInterpolatedWidthByX(cx, this);
+        if (width <= 0) {
+            return;
+        }
+
+        final float inset = dp(BUBBLE_INSET_DP);
+        final float top = getPaddingTop() + inset;
+        final float bottom = getHeight() - getPaddingBottom() - inset;
+        final float height = bottom - top;
+        if (height <= 0) {
+            return;
+        }
+        ensureBubblePaints(height);
+
+        final float left = cx - width / 2f + inset;
+        final float right = cx + width / 2f - inset;
+        AndroidUtilities.rectTmp.set(left, top, right, bottom);
+        canvas.drawRoundRect(AndroidUtilities.rectTmp, height / 2f, height / 2f, bubbleFillPaint);
+        canvas.drawRoundRect(AndroidUtilities.rectTmp, height / 2f, height / 2f, bubbleStrokePaint);
+    }
+
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
-        if (drawCustomSelector) {
-            final float x = animatedLongSelectedViewCenterX + animatedLongSelectedViewOffsetX;
-            final float sWidth = getInterpolatedWidthByX(x, this);
-            final float sHeight = getHeight() - getPaddingTop() - getPaddingBottom();
-
-            canvas.drawRoundRect(
-                    x - sWidth / 2f, (getHeight() - sHeight) / 2f,
-                    x + sWidth / 2f, (getHeight() + sHeight) / 2f,
-                    sHeight / 2f, sHeight / 2f, selectorPaint);
-        }
+        drawSelectionBubble(canvas);
 
         super.dispatchDraw(canvas);
     }
 
 
-    final Paint selectorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     final SpringAnimation scaleX = new SpringAnimation(this, DynamicAnimation.SCALE_X, 1f);
     final SpringAnimation scaleY = new SpringAnimation(this, DynamicAnimation.SCALE_Y, 1f);
 

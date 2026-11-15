@@ -187,6 +187,11 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
     private NumberTextView selectedContactsCountTextView;
     private ActionBarMenuItem deleteItem;
 
+    // Tele iOS: custom header pill containers ("Sort By" on the left, "+" on the
+    // right). They are added directly to the action bar, so they sit ON TOP of the
+    // selection action mode and used to cover its counter and delete trash.
+    private @Nullable View sortPillContainer, addPillContainer;
+
     private ActionBarMenuItem searchItem;
 
     private BackDrawable backDrawable;
@@ -309,6 +314,11 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
         searchField.setPivotY(0);
         final ActionBarMenu actionMode = actionBar.createActionMode(false, null);
         actionMode.setBackgroundColor(0);
+        // Tele iOS: lift the selection bar above the custom header pills ("Sort By" / "+")
+        // that are added later to the same action bar, so its counter and delete trash
+        // can never be covered by them
+        actionMode.setElevation(dp(8));
+        actionMode.setTranslationZ(dp(8));
 
         if (hasMainTabs) {
             actionModeCloseView = new ImageView(context);
@@ -451,6 +461,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
             });
             sortContainer.addView(sortPill, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 34, Gravity.LEFT));
             actionBar.addView(sortContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
+            sortPillContainer = sortContainer;
 
             GradientDrawable addPillBg = new GradientDrawable();
             addPillBg.setShape(GradientDrawable.RECTANGLE);
@@ -474,6 +485,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
             addPill.setOnClickListener(v -> new NewContactBottomSheet(ContactsActivity.this, getContext()).show());
             addContainer.addView(addPill, LayoutHelper.createFrame(34, 34, Gravity.RIGHT));
             actionBar.addView(addContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.RIGHT | Gravity.TOP));
+            addPillContainer = addContainer;
         }
 
         listView = new RecyclerListView(context);
@@ -1124,10 +1136,36 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
             updateActionModeColors();
             actionBar.showActionMode();
 
+            // Tele iOS: the close drawable is BackDrawable(true) (alwaysClose) which
+            // renders an X; force it to its final state instantly so it never shows
+            // a stuck mid-rotation mess, and get the header pills out of the way
+            if (actionModeCloseView != null && actionModeCloseView.getDrawable() instanceof BackDrawable) {
+                ((BackDrawable) actionModeCloseView.getDrawable()).setRotation(1, false);
+            }
+            setHeaderPillsVisible(false, true);
+
             backDrawable.setRotation(1, true);
         }
 
         selectedContactsCountTextView.setNumber(selectedContacts.size(), updateAnimated);
+    }
+
+    private void setHeaderPillsVisible(boolean visible, boolean animated) {
+        final float targetAlpha = visible ? 1f : 0f;
+        for (View pillContainer : new View[]{sortPillContainer, addPillContainer}) {
+            if (pillContainer == null || Math.abs(pillContainer.getAlpha() - targetAlpha) < 0.01f) {
+                continue;
+            }
+            if (animated) {
+                pillContainer.animate().alpha(targetAlpha).setDuration(180).setInterpolator(CubicBezierInterpolator.DEFAULT).start();
+            } else {
+                pillContainer.setAlpha(targetAlpha);
+            }
+            // keep the containers laid out (alpha only) so the header does not jump,
+            // and swallow touches on the invisible pills while selecting
+            pillContainer.setVisibility(View.VISIBLE);
+            pillContainer.setClickable(!visible);
+        }
     }
 
     private void updateActionModeColors() {
@@ -1146,6 +1184,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
 
     private void hideActionMode() {
         actionBar.hideActionMode();
+        setHeaderPillsVisible(true, true);
         int count = listView.getChildCount();
         for (int i = 0; i < count; i++) {
             View view = listView.getChildAt(i);

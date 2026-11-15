@@ -13286,8 +13286,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             boolean hideStoriesInArchive = MessagesController.getGlobalMainSettings().getBoolean("hideStoriesInArchive", false);
             newVisibility = !hideStoriesInArchive && !getStoriesController().getHiddenList().isEmpty();
         } else {
-            newVisibility = false;
-            onlySelfStories = false;
+            // Tele iOS: restored the full stories row above the chats list (matches upstream
+            // 11.4.x); the fork previously forced newVisibility=false here which kept the
+            // row hidden and left only the collapsed header pill
+            newVisibility = !onlySelfStories && getStoriesController().hasStories();
+            onlySelfStories = getStoriesController().hasOnlySelfStories();
         }
 
         hasOnlySlefStories = onlySelfStories;

@@ -3600,9 +3600,9 @@ public class StatisticActivity extends BaseFragment implements NotificationCente
     }
 
     public void selectTab(int position, boolean animated) {
-        for (int a = 0; a < tabs.length; a++) {
-            GlassTabView tab = tabs[a];
-            tab.setSelected(a == position, animated);
+        // Tele iOS: route through the tabs layout so the glass bubble slides to the new tab
+        if (tabsView != null && position >= 0 && position < tabs.length) {
+            tabsView.setTabSelected(tabs[position], animated);
         }
     }
 

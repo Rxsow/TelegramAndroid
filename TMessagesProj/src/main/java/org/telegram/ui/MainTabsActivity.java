@@ -874,9 +874,16 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     public GlassTabView[] tabs;
 
     public void selectTab(int position, boolean animated) {
+        // Tele iOS: route through the tabs layout so the glass bubble slides to the new tab
+        int target = -1;
         for (int a = 0; a < tabs.length; a++) {
-            GlassTabView tab = tabs[a];
-            tab.setSelected(indexToPosition(a) == position, animated);
+            if (indexToPosition(a) == position) {
+                target = a;
+                break;
+            }
+        }
+        if (target >= 0 && tabsView != null) {
+            tabsView.setTabSelected(tabs[target], animated);
         }
     }
 

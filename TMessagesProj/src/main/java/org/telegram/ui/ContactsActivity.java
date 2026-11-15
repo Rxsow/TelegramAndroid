@@ -185,6 +185,7 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
 
     private @Nullable ImageView actionModeCloseView;
     private NumberTextView selectedContactsCountTextView;
+    private ActionBarMenuItem deleteItem;
 
     private ActionBarMenuItem searchItem;
 
@@ -326,7 +327,11 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
         actionMode.addView(selectedContactsCountTextView, LayoutHelper.createLinear(0, LayoutHelper.MATCH_PARENT, 1.0f, hasMainTabs ? 18 : 72, 0, 0, 0));
         selectedContactsCountTextView.setOnTouchListener((v, event) -> true);
 
-        actionMode.addItemWithWidth(delete, R.drawable.msg_delete, dp(54), getString(R.string.Delete));
+        // Tele iOS: delete selected contacts with a trash icon; the tint is re-applied
+        // live from the theme on every show so the icon stays visible in both light
+        // and dark themes (iOS-style destructive red)
+        deleteItem = actionMode.addItemWithWidth(delete, R.drawable.msg_delete, dp(54), getString(R.string.Delete));
+        updateActionModeColors();
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -1116,12 +1121,27 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
             updateAnimated = true;
         } else if (checked) {
             AndroidUtilities.hideKeyboard(fragmentView.findFocus());
+            updateActionModeColors();
             actionBar.showActionMode();
 
             backDrawable.setRotation(1, true);
         }
 
         selectedContactsCountTextView.setNumber(selectedContacts.size(), updateAnimated);
+    }
+
+    private void updateActionModeColors() {
+        final int icon = getThemedColor(Theme.key_actionBarActionModeDefaultIcon);
+        final int red = getThemedColor(Theme.key_text_RedRegular);
+        if (deleteItem != null) {
+            deleteItem.setIconColor(red);
+        }
+        if (actionModeCloseView != null) {
+            actionModeCloseView.setColorFilter(new PorterDuffColorFilter(icon, PorterDuff.Mode.MULTIPLY));
+        }
+        if (selectedContactsCountTextView != null) {
+            selectedContactsCountTextView.setTextColor(icon);
+        }
     }
 
     private void hideActionMode() {

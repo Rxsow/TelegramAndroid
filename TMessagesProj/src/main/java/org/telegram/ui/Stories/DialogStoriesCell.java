@@ -340,6 +340,8 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         telegramLogoView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         telegramLogoView.setFocusableInTouchMode(true);
         addView(telegramLogoView, LayoutHelper.createFrame(90, 22));
+        // Tele iOS: hidden outright — see checkUi_titleVisibility
+        telegramLogoView.setVisibility(GONE);
 
         statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
         statusDrawable.center = true;
@@ -2218,8 +2220,11 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
             titleView.setVisibility(titleAlpha > 0 ? VISIBLE : GONE);
         }
         if (telegramLogoView != null) {
-            telegramLogoView.setAlpha(logoAlpha);
-            telegramLogoView.setVisibility(logoAlpha > 0 ? VISIBLE : GONE);
+            // Tele iOS: never show the big "Telegram" wordmark in the dialogs header —
+            // iOS style keeps the header clean (it used to appear whenever the stories
+            // row was visible with no title text, overlapping the proxy status overlay)
+            telegramLogoView.setAlpha(0f);
+            telegramLogoView.setVisibility(GONE);
         }
         if (emojiStatusView != null) {
             emojiStatusView.setAlpha(logoAlpha);

@@ -5904,8 +5904,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             storiesOverscrollCalled = false;
         }
         dialogStoriesCell.setOverscroll(storiesOverscroll);
-        dialogStoriesCell.setVisibility(storiesOverscroll != 0 ? View.VISIBLE : View.INVISIBLE);
-        dialogStoriesCell.setTranslationY(-dp(100) * (1f - Utilities.clamp(storiesOverscroll / dp(90), 0f, 1f)) - dp(8));
+        // Tele iOS: removed the fork hack that forced the stories cell INVISIBLE when
+        // the overscroll settled back to 0 — with the stories row restored it must stay
+        // visible after every pull-down (it used to vanish until the tab was re-opened);
+        // visibility and translation are owned by updateStoriesVisibility / the layout pass
         viewPage.listView.setViewsOffset(storiesOverscroll);
         viewPage.listView.setOverScrollMode(storiesOverscroll != 0 ? RecyclerView.OVER_SCROLL_NEVER : RecyclerView.OVER_SCROLL_ALWAYS);
         fragmentView.invalidate();

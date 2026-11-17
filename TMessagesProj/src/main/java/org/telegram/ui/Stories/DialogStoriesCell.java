@@ -180,6 +180,9 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
     private ActionBar actionBar;
     private StoriesUtilities.EnsureStoryFileLoadedObject globalCancelable;
     private float menuItemsOffset;
+    // Tele iOS: extra X applied to the collapsed pill / cluster so it clears the
+    // fork's Edit button in the header (expanded row keeps the upstream inset)
+    float collapsedExtraOffset = dp(54);
 
     public DialogStoriesCell(@NonNull Context context, BaseFragment fragment, int currentAccount, int type) {
         super(context);
@@ -690,7 +693,10 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         float bottomY = AndroidUtilities.lerp(0, maxY, collapsedProgress1);
         recyclerListView.setTranslationY(bottomY);
         listViewMini.setTranslationY(bottomY);
-        listViewMini.setTranslationX(menuItemsOffset);
+        // Tele iOS: the collapsed pill used to land on top of the header's Edit button
+        // (menuItemsOffset ≈ 16dp is where upstream has no header controls); shift it
+        // (and the scroll-collapse cluster) past the Edit capsule (~64dp wide + gap)
+        listViewMini.setTranslationX(menuItemsOffset + collapsedExtraOffset);
 
         for (int i = 0; i < viewsDrawInParent.size(); i++) {
             viewsDrawInParent.get(i).drawInParent = false;
@@ -820,7 +826,7 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
                 } else {
                     toX = dp(COLLAPSED_DIS) + dp(COLLAPSED_DIS) * cellCollapsedProgress - AndroidUtilities.dpf2(0.5f) + AndroidUtilities.lerp(dp(COLLAPSED_DIS + COLLAPSED_DIS), 0f, collapsedProgress);
                 }
-                toX += menuItemsOffset;
+                toX += menuItemsOffset + collapsedExtraOffset * collapsedProgress;
                 if (!collapsed) {
                     float dstCellX = 0;
                     if (overscrollProgress > 0) {

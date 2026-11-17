@@ -1493,7 +1493,72 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         showEditDoneProgress(false, animated);
     }
 
+    // Tele iOS: login was reported to close the whole app when moving from the phone
+    // screen to the code screen. The login flow code itself is stock, so without a
+    // logcat the root cause can't be pinned down — instead of dying silently, every
+    // step of the transition now catches Throwable and surfaces it (dialog + file),
+    // so the next run tells us exactly what breaks.
+    private void reportLoginProblem(String where, Throwable t) {
+        try {
+            FileLog.e("Tele iOS login problem at " + where, t);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Login problem at: ").append(where).append('\n');
+            sb.append(t.getClass().getName());
+            if (t.getMessage() != null) {
+                sb.append(": ").append(t.getMessage());
+            }
+            sb.append('\n');
+            StackTraceElement[] st = t.getStackTrace();
+            for (int i = 0; i < Math.min(st.length, 10); i++) {
+                sb.append("  at ").append(st[i]).append('\n');
+            }
+            if (t.getCause() != null) {
+                sb.append("cause: ").append(t.getCause().getClass().getName());
+                if (t.getCause().getMessage() != null) {
+                    sb.append(": ").append(t.getCause().getMessage());
+                }
+                sb.append('\n');
+            }
+            final String text = sb.toString();
+            try {
+                java.io.File dir = ApplicationLoader.applicationContext.getExternalFilesDir(null);
+                if (dir != null) {
+                    java.io.File f = new java.io.File(dir, "login_crash.txt");
+                    java.io.FileWriter w = new java.io.FileWriter(f, true);
+                    w.write(new java.util.Date().toString() + "\n" + text + "\n\n");
+                    w.close();
+                }
+            } catch (Exception e2) {
+                FileLog.e(e2);
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                try {
+                    if (getParentActivity() == null || getParentActivity().isFinishing()) {
+                        return;
+                    }
+                    AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+                    builder.setTitle(getString(R.string.ErrorOccurred));
+                    builder.setMessage(text);
+                    builder.setPositiveButton(getString(R.string.OK), null);
+                    showDialog(builder.create());
+                } catch (Exception e3) {
+                    FileLog.e(e3);
+                }
+            });
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
     public void setPage(@ViewNumber int page, boolean animated, Bundle params, boolean back) {
+        try {
+            setPageInternal(page, animated, params, back);
+        } catch (Throwable t) {
+            reportLoginProblem("switch to page " + page, t);
+        }
+    }
+
+    private void setPageInternal(@ViewNumber int page, boolean animated, Bundle params, boolean back) {
         boolean needFloatingButton = page == VIEW_PHONE_INPUT || page == VIEW_REGISTER || page == VIEW_PASSWORD ||
                 page == VIEW_NEW_PASSWORD_STAGE_1 || page == VIEW_NEW_PASSWORD_STAGE_2 || page == VIEW_ADD_EMAIL || page == VIEW_CODE_PHRASE || page == VIEW_CODE_WORD;
         if (page == currentViewNum) {
@@ -1750,6 +1815,14 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     private boolean isRequestingFirebaseSms;
     private void fillNextCodeParams(Bundle params, TLRPC.auth_SentCode res, boolean animate) {
+        try {
+            fillNextCodeParamsInternal(params, res, animate);
+        } catch (Throwable t) {
+            reportLoginProblem("fill code params", t);
+        }
+    }
+
+    private void fillNextCodeParamsInternal(Bundle params, TLRPC.auth_SentCode res, boolean animate) {
         if (res instanceof TLRPC.TL_auth_sentCodePaymentRequired) {
             final TLRPC.TL_auth_sentCodePaymentRequired auth = (TLRPC.TL_auth_sentCodePaymentRequired) res;
             params.putString("product", auth.store_product);
@@ -2873,6 +2946,14 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         @Override
         public void onNextPressed(String code) {
+            try {
+                onNextPressedInternal(code);
+            } catch (Throwable t) {
+                reportLoginProblem("phone screen: next pressed", t);
+            }
+        }
+
+        private void onNextPressedInternal(String code) {
             if (getParentActivity() == null || nextPressed || isRequestingFirebaseSms) {
                 return;
             }
@@ -3196,6 +3277,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             phoneInputData.country = currentCountry;
             phoneInputData.patterns = phoneFormatMap.get(codeField.getText().toString());
             int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                try {
                 nextPressed = false;
                 if (error == null) {
                     if (response instanceof TLRPC.TL_auth_sentCodeSuccess) {
@@ -3258,6 +3340,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 }
                 if (!isRequestingFirebaseSms) {
                     needHideProgress(false);
+                }
+                } catch (Throwable t) {
+                    reportLoginProblem("sendCode response", t);
                 }
             }), ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin | ConnectionsManager.RequestFlagTryDifferentDc | ConnectionsManager.RequestFlagEnableUnauthorized);
             needShowProgress(reqId);

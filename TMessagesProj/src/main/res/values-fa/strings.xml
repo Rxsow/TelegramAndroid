@@ -316,4 +316,24 @@
     <string name="QuickAttachNewestFirst">جدیدترین عکس‌ها در سمت چپ</string>
     <string name="QuickAttachNewestFirstInfo">اگر خاموش باشد، عکس‌های اخیر از قدیمی به جدید، از چپ به راست مرتب می‌شوند.</string>
     <string name="PhotoSent">عکس ارسال شد</string>
+    <string name="ProxyDisableOnVpn">عدم استفاده از پروکسی هنگام فعال بودن VPN</string>
+    <string name="ProxySortByPing">زمان پینگ</string>
+    <string name="ProxySortByDateAdded">تاریخ اضافه شدن</string>
+    <string name="ProxyImportFromClipboard">وارد کردن از کلیپ‌بورد</string>
+    <string name="ProxyImportFromFile">وارد کردن از فایل</string>
+    <string name="ProxyExportToFile">ذخیره همه در فایل</string>
+    <string name="ProxyCopyAll">کپی همه</string>
+    <string name="ProxyShareAll">اشتراک‌گذاری همه</string>
+    <string name="ProxyRecheckAll">بررسی مجدد همه</string>
+    <string name="ProxyDeleteUnavailable">حذف پروکسی‌های غیرفعال</string>
+    <string name="ProxyDeleteUnavailableConfirm">حذف %1$d پروکسی غیرفعال؟ اتصال فعال به بهترین پروکسی باقی‌مانده منتقل می‌شود.</string>
+    <string name="ProxyExportDone">پروکسی‌ها در این فایل ذخیره شد:\n%1$s</string>
+    <string name="ProxyExportError">ذخیره پروکسی‌ها انجام نشد</string>
+    <string name="ProxyImportDone">%1$d پروکسی اضافه شد (%2$d تکراری نادیده گرفته شد)</string>
+    <string name="ProxyImportError">وارد کردن پروکسی‌ها انجام نشد</string>
+    <string name="ProxyImportNothingFound">هیچ لینک پروکسی معتبری پیدا نشد</string>
+    <string name="ProxyImportClipboardEmpty">کلیپ‌بورد خالی است</string>
+    <string name="ProxyNothingToExport">پروکسی‌ای برای ذخیره وجود ندارد</string>
+    <string name="ProxyCopiedAll">همه پروکسی‌ها کپی شد</string>
+    <string name="ProxyNoUnavailable">همه پروکسی‌ها فعال هستند</string>
 </resources>

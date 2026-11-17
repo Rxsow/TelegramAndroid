@@ -59,7 +59,10 @@ public class SharedConfig {
      */
     private final static int PROXY_SCHEMA_V2 = 2;
     private final static int PROXY_SCHEMA_V3 = 3;
-    private final static int PROXY_CURRENT_SCHEMA_VERSION = PROXY_SCHEMA_V3;
+    // Tele iOS: v4 adds addDate (when the proxy was added) so the list can be
+    // sorted by date added as well as by ping
+    private final static int PROXY_SCHEMA_V4 = 4;
+    private final static int PROXY_CURRENT_SCHEMA_VERSION = PROXY_SCHEMA_V4;
 
     public final static int PASSCODE_TYPE_PIN = 0,
             PASSCODE_TYPE_PASSWORD = 1;
@@ -405,6 +408,8 @@ public class SharedConfig {
         public boolean checking;
         public boolean available;
         public long availableCheckTime;
+        // Tele iOS: when the proxy was added, for the "date added" sort mode
+        public long addDate;
 
         public ProxyInfo(@NonNull ProxySettings proxySettings) {
             settings = proxySettings;
@@ -438,6 +443,9 @@ public class SharedConfig {
             info.availableCheckTime = availableCheckTime;
             info.ping = ping;
             info.available = ping > 0;
+            if (version >= PROXY_SCHEMA_V4) {
+                info.addDate = data.readInt64(false);
+            }
 
             return info;
         }
@@ -450,6 +458,7 @@ public class SharedConfig {
             data.writeString(settings.getSecret());
             data.writeInt64(ping);
             data.writeInt64(availableCheckTime);
+            data.writeInt64(addDate);
             data.writeInt32(ProxySettings.typeToInt(settings.getType()));
         }
     }
@@ -1493,7 +1502,8 @@ public class SharedConfig {
             if (count == -1) { // V2 or newer
                 int version = data.readByte(false);
 
-                if (version == PROXY_SCHEMA_V2 || version == PROXY_SCHEMA_V3) {
+                // Tele iOS: accept the new v4 schema (adds addDate) as well
+                if (version == PROXY_SCHEMA_V2 || version == PROXY_SCHEMA_V3 || version == PROXY_SCHEMA_V4) {
                     count = data.readInt32(false);
 
                     for (int i = 0; i < count; i++) {
@@ -1564,6 +1574,10 @@ public class SharedConfig {
             }
         }
         proxyList.add(0, proxyInfo);
+        // Tele iOS: stamp when the proxy was added ("date added" sort mode)
+        if (proxyInfo.addDate == 0) {
+            proxyInfo.addDate = System.currentTimeMillis();
+        }
         saveProxyList();
         return proxyInfo;
     }

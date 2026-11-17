@@ -13,7 +13,10 @@ import static org.telegram.messenger.LocaleController.getString;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.app.Activity;
 import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -22,6 +25,7 @@ import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -40,13 +44,17 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.DownloadController;
+import org.telegram.messenger.FileLog;
+import org.telegram.messenger.ForkProxyVpnController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.ProxyRotationController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.Utilities;
 import org.telegram.utils.proxy.ProxySettings;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -62,6 +70,7 @@ import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.CheckBox2;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
@@ -69,14 +78,35 @@ import org.telegram.ui.Components.NumberTextView;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.SlideChooseView;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class ProxyListActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
     private final static boolean IS_PROXY_ROTATION_AVAILABLE = true;
+    // Tele iOS: "Sort By" modes
+    private static final int SORT_MODE_PING = 0;
+    private static final int SORT_MODE_DATE_ADDED = 1;
     private static final int MENU_DELETE = 0;
     private static final int MENU_SHARE = 1;
+
+    // Tele iOS: 3-dot menu actions (proxy backup / import / recheck / cleanup)
+    private static final int MENU_IMPORT_CLIPBOARD = 10;
+    private static final int MENU_IMPORT_FILE = 11;
+    private static final int MENU_EXPORT_FILE = 12;
+    private static final int MENU_COPY_ALL = 13;
+    private static final int MENU_SHARE_ALL = 14;
+    private static final int MENU_RECHECK_ALL = 15;
+    private static final int MENU_DELETE_UNAVAILABLE = 16;
+    private static final int PROXY_IMPORT_REQUEST_CODE = 65101;
 
     private ListAdapter listAdapter;
     private RecyclerListView listView;
@@ -94,7 +124,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     @Keep
     private int useProxyRow;
     private int useProxyShadowRow;
+    private int vpnBypassRow;
     private int connectionsHeaderRow;
+    private int sortRow;
     private int proxyStartRow;
     private int proxyEndRow;
     @Keep
@@ -394,7 +426,16 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
         listView.setAdapter(listAdapter);
         listView.setOnItemClickListener((view, position) -> {
-            if (position == webSocketRow) {
+            if (position == vpnBypassRow) {
+                // Tele iOS: toggle "disable proxy while a VPN is active"
+                boolean value = !ForkProxyVpnController.isEnabled();
+                ForkProxyVpnController.setEnabled(value);
+                ((TextCheckCell) view).setChecked(value);
+                return;
+            } else if (position == sortRow) {
+                showSortByDialog();
+                return;
+            } else if (position == webSocketRow) {
                 SharedPreferences preferences = MessagesController.getGlobalMainSettings();
                 boolean value = !preferences.getBoolean("webSocketTransport", false);
                 preferences.edit().putBoolean("webSocketTransport", value).commit();
@@ -515,6 +556,17 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             return false;
         });
 
+        // Tele iOS: 3-dot menu with the proxy tools (matches the reference UI)
+        ActionBarMenu overflowMenu = actionBar.createMenu();
+        ActionBarMenuItem overflowItem = overflowMenu.addItem(MENU_IMPORT_CLIPBOARD - 1, R.drawable.ic_ab_other);
+        overflowItem.addSubItem(MENU_IMPORT_CLIPBOARD, getString(R.string.ProxyImportFromClipboard));
+        overflowItem.addSubItem(MENU_IMPORT_FILE, getString(R.string.ProxyImportFromFile));
+        overflowItem.addSubItem(MENU_EXPORT_FILE, getString(R.string.ProxyExportToFile));
+        overflowItem.addSubItem(MENU_COPY_ALL, getString(R.string.ProxyCopyAll));
+        overflowItem.addSubItem(MENU_SHARE_ALL, getString(R.string.ProxyShareAll));
+        overflowItem.addSubItem(MENU_RECHECK_ALL, getString(R.string.ProxyRecheckAll));
+        overflowItem.addSubItem(MENU_DELETE_UNAVAILABLE, getString(R.string.ProxyDeleteUnavailable));
+
         ActionBarMenu actionMode = actionBar.createActionMode();
         selectedCountTextView = new NumberTextView(actionMode.getContext());
         selectedCountTextView.setTextSize(18);
@@ -589,6 +641,27 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                             listAdapter.clearSelected();
                         }
                         break;
+                    case MENU_SHARE_ALL:
+                        shareAllProxies();
+                        break;
+                    case MENU_IMPORT_CLIPBOARD:
+                        importFromClipboard();
+                        break;
+                    case MENU_IMPORT_FILE:
+                        importFromFile();
+                        break;
+                    case MENU_EXPORT_FILE:
+                        exportProxiesToFile();
+                        break;
+                    case MENU_COPY_ALL:
+                        copyAllProxies();
+                        break;
+                    case MENU_RECHECK_ALL:
+                        recheckAllProxies();
+                        break;
+                    case MENU_DELETE_UNAVAILABLE:
+                        deleteUnavailableProxies();
+                        break;
                 }
             }
         });
@@ -632,6 +705,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         }
         webSocketInfoRow = rowCount++;
         useProxyRow = rowCount++;
+        // Tele iOS: "disable proxy on VPN" toggle right below the Use Proxy switch
+        vpnBypassRow = rowCount++;
         if (useProxySettings && SharedConfig.currentProxy != null && SharedConfig.proxyList.size() > 1 && IS_PROXY_ROTATION_AVAILABLE) {
             rotationRow = rowCount++;
             if (SharedConfig.proxyRotationEnabled) {
@@ -652,6 +727,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             useProxyShadowRow = -1;
         }
         connectionsHeaderRow = rowCount++;
+        // Tele iOS: "Sort By" row lives inside the Connections section, like the reference UI
+        sortRow = rowCount++;
 
         if (notify) {
             proxyList.clear();
@@ -671,18 +748,23 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             }
 
             boolean isChecking = checking;
-            Collections.sort(proxyList, (o1, o2) -> {
-                long bias1 = SharedConfig.currentProxy == o1 ? -200000 : 0;
-                if (!o1.available) {
-                    bias1 += 100000;
-                }
-                long bias2 = SharedConfig.currentProxy == o2 ? -200000 : 0;
-                if (!o2.available) {
-                    bias2 += 100000;
-                }
-                return Long.compare(isChecking && o1 != SharedConfig.currentProxy ? SharedConfig.proxyList.indexOf(o1) * 10000L : o1.ping + bias1,
-                        isChecking && o2 != SharedConfig.currentProxy ? SharedConfig.proxyList.indexOf(o2) * 10000L : o2.ping + bias2);
-            });
+            // Tele iOS: sort by ping (upstream behaviour) or by the date a proxy was added
+            if (MessagesController.getGlobalMainSettings().getInt("forkProxySortMode", SORT_MODE_PING) == SORT_MODE_DATE_ADDED) {
+                Collections.sort(proxyList, (o1, o2) -> Long.compare(o2.addDate, o1.addDate));
+            } else {
+                Collections.sort(proxyList, (o1, o2) -> {
+                    long bias1 = SharedConfig.currentProxy == o1 ? -200000 : 0;
+                    if (!o1.available) {
+                        bias1 += 100000;
+                    }
+                    long bias2 = SharedConfig.currentProxy == o2 ? -200000 : 0;
+                    if (!o2.available) {
+                        bias2 += 100000;
+                    }
+                    return Long.compare(isChecking && o1 != SharedConfig.currentProxy ? SharedConfig.proxyList.indexOf(o1) * 10000L : o1.ping + bias1,
+                            isChecking && o2 != SharedConfig.currentProxy ? SharedConfig.proxyList.indexOf(o2) * 10000L : o2.ping + bias2);
+                });
+            }
         }
 
         if (!proxyList.isEmpty()) {
@@ -727,6 +809,301 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             }));
         }
     }
+
+    // ================= Tele iOS: proxy tools =================
+
+    private void showSortByDialog() {
+        String[] options = {getString(R.string.ProxySortByPing), getString(R.string.ProxySortByDateAdded)};
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(getString(R.string.SortBy));
+        builder.setItems(options, (dialog, which) -> {
+            if (MessagesController.getGlobalMainSettings().getInt("forkProxySortMode", SORT_MODE_PING) == which) {
+                return;
+            }
+            MessagesController.getGlobalMainSettings().edit().putInt("forkProxySortMode", which).commit();
+            updateRows(true);
+        });
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        showDialog(builder.create());
+    }
+
+    private String buildProxyLinksText() {
+        StringBuilder links = new StringBuilder();
+        for (SharedConfig.ProxyInfo info : SharedConfig.proxyList) {
+            if (links.length() > 0) {
+                links.append("\n");
+            }
+            links.append(info.settings.getLink());
+        }
+        return links.toString();
+    }
+
+    private void copyAllProxies() {
+        String text = buildProxyLinksText();
+        if (text.isEmpty()) {
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyNothingToExport)).show();
+            return;
+        }
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getParentActivity().getSystemService(Context.CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("proxies", text));
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.copy, getString(R.string.ProxyCopiedAll)).show();
+        } catch (Exception e) {
+            FileLog.e(e);
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyExportError)).show();
+        }
+    }
+
+    private void shareAllProxies() {
+        String text = buildProxyLinksText();
+        if (text.isEmpty()) {
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyNothingToExport)).show();
+            return;
+        }
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, text);
+        Intent chooserIntent = Intent.createChooser(shareIntent, getString(R.string.ProxyShareAll));
+        chooserIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getParentActivity().startActivity(chooserIntent);
+    }
+
+    private void exportProxiesToFile() {
+        String text = buildProxyLinksText();
+        if (text.isEmpty()) {
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyNothingToExport)).show();
+            return;
+        }
+        try {
+            File dir = ApplicationLoader.applicationContext.getExternalFilesDir(null);
+            if (dir == null) {
+                dir = ApplicationLoader.applicationContext.getFilesDir();
+            }
+            String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            File file = new File(dir, "tele_ios_proxies_" + stamp + ".txt");
+            OutputStreamWriter writer = new OutputStreamWriter(new java.io.FileOutputStream(file), StandardCharsets.UTF_8);
+            writer.write(text);
+            writer.write("\n");
+            writer.close();
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.done, getString(R.string.ProxyExportDone, file.getAbsolutePath())).show();
+        } catch (Exception e) {
+            FileLog.e(e);
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyExportError)).show();
+        }
+    }
+
+    private void importFromFile() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/plain", "application/octet-stream", "text/*"});
+            startActivityForResult(intent, PROXY_IMPORT_REQUEST_CODE);
+        } catch (Exception e) {
+            FileLog.e(e);
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyExportError)).show();
+        }
+    }
+
+    @Override
+    public void onActivityResultFragment(int requestCode, int resultCode, Intent data) {
+        if (requestCode == PROXY_IMPORT_REQUEST_CODE) {
+            if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
+                return;
+            }
+            int added = 0, duplicates = 0;
+            try {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(getParentActivity().getContentResolver().openInputStream(data.getData()), StandardCharsets.UTF_8));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    SharedConfig.ProxyInfo parsed = parseProxyLine(line);
+                    if (parsed == null) {
+                        continue;
+                    }
+                    SharedConfig.ProxyInfo result = SharedConfig.addProxy(parsed);
+                    if (result == parsed) {
+                        added++;
+                    } else {
+                        duplicates++;
+                    }
+                }
+                reader.close();
+            } catch (Exception e) {
+                FileLog.e(e);
+                BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyImportError)).show();
+                return;
+            }
+            finishImport(added, duplicates);
+        }
+    }
+
+    private void importFromClipboard() {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getParentActivity().getSystemService(Context.CLIPBOARD_SERVICE);
+            CharSequence clipText = clipboard != null && clipboard.hasPrimaryClip() && clipboard.getPrimaryClip() != null && clipboard.getPrimaryClip().getItemCount() > 0
+                    ? clipboard.getPrimaryClip().getItemAt(0).getText()
+                    : null;
+            if (TextUtils.isEmpty(clipText)) {
+                BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyImportClipboardEmpty)).show();
+                return;
+            }
+            int added = 0, duplicates = 0;
+            for (String line : clipText.toString().split("\n")) {
+                SharedConfig.ProxyInfo parsed = parseProxyLine(line);
+                if (parsed == null) {
+                    continue;
+                }
+                SharedConfig.ProxyInfo result = SharedConfig.addProxy(parsed);
+                if (result == parsed) {
+                    added++;
+                } else {
+                    duplicates++;
+                }
+            }
+            finishImport(added, duplicates);
+        } catch (Exception e) {
+            FileLog.e(e);
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyImportError)).show();
+        }
+    }
+
+    private void finishImport(int added, int duplicates) {
+        if (added == 0 && duplicates == 0) {
+            BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyImportNothingFound)).show();
+            return;
+        }
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.proxySettingsChanged);
+        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
+        updateRows(true);
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.done, getString(R.string.ProxyImportDone, added, duplicates)).show();
+    }
+
+    /**
+     * Tele iOS: understands t.me/proxy & t.me/socks links (tg:// or https://),
+     * plus the raw server:port[:user:pass] notation, one proxy per line.
+     */
+    private SharedConfig.ProxyInfo parseProxyLine(String line) {
+        if (line == null) {
+            return null;
+        }
+        String s = line.trim();
+        if (s.isEmpty() || s.startsWith("#") || s.startsWith("//")) {
+            return null;
+        }
+        try {
+            String lower = s.toLowerCase(Locale.US);
+            if (lower.contains("t.me/proxy") || lower.contains("t.me/socks") || lower.contains("t.me/webproxy") || lower.startsWith("tg://proxy")) {
+                if (!lower.contains("://")) {
+                    s = "https://" + s;
+                }
+                Uri uri = Uri.parse(s);
+                String server = uri.getQueryParameter("server");
+                String portStr = uri.getQueryParameter("port");
+                if (TextUtils.isEmpty(server) || TextUtils.isEmpty(portStr)) {
+                    return null;
+                }
+                int port = Utilities.parseInt(portStr);
+                if (port <= 0 || port > 65535) {
+                    return null;
+                }
+                String secret = uri.getQueryParameter("secret");
+                ProxySettings.Builder builder = ProxySettings.builder().setAddress(server).setPort(port);
+                if (!TextUtils.isEmpty(secret)) {
+                    builder.setSecret(secret).setType(ProxySettings.Type.MTPROTO);
+                } else {
+                    String user = uri.getQueryParameter("user");
+                    String pass = uri.getQueryParameter("pass");
+                    builder.setUser(user == null ? "" : user).setPassword(pass == null ? "" : pass).setType(ProxySettings.Type.SOCKS5);
+                }
+                return new SharedConfig.ProxyInfo(builder.build());
+            }
+            if (s.matches("[^:/\\s]+:\\d+(:[^:]*:[^:]*)?")) {
+                String[] parts = s.split(":", 4);
+                int port = Utilities.parseInt(parts[1]);
+                if (port <= 0 || port > 65535) {
+                    return null;
+                }
+                ProxySettings.Builder builder = ProxySettings.builder().setAddress(parts[0]).setPort(port);
+                if (parts.length == 4 && (!TextUtils.isEmpty(parts[2]) || !TextUtils.isEmpty(parts[3]))) {
+                    builder.setUser(parts[2]).setPassword(parts[3]).setType(ProxySettings.Type.SOCKS5);
+                } else {
+                    builder.setType(ProxySettings.Type.SOCKS5);
+                }
+                return new SharedConfig.ProxyInfo(builder.build());
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return null;
+    }
+
+    private void recheckAllProxies() {
+        for (SharedConfig.ProxyInfo info : SharedConfig.proxyList) {
+            // reset the check stamp so checkProxyList() does not skip proxies
+            // that were verified within the last two minutes
+            info.availableCheckTime = 0;
+        }
+        wasCheckedAllList = false;
+        updateRows(true);
+    }
+
+    private void deleteUnavailableProxies() {
+        ArrayList<SharedConfig.ProxyInfo> toDelete = new ArrayList<>();
+        for (SharedConfig.ProxyInfo info : SharedConfig.proxyList) {
+            if (!info.checking && !info.available && info.availableCheckTime != 0) {
+                toDelete.add(info);
+            }
+        }
+        if (toDelete.isEmpty()) {
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.done, getString(R.string.ProxyNoUnavailable)).show();
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+        builder.setTitle(getString(R.string.ProxyDeleteUnavailable));
+        builder.setMessage(getString(R.string.ProxyDeleteUnavailableConfirm, toDelete.size()));
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        builder.setPositiveButton(getString(R.string.Delete), (dialog, which) -> {
+            boolean wasEnabled = MessagesController.getGlobalMainSettings().getBoolean("proxy_enabled", false);
+            for (SharedConfig.ProxyInfo info : toDelete) {
+                SharedConfig.deleteProxy(info);
+            }
+            if (wasEnabled && SharedConfig.currentProxy == null && !SharedConfig.proxyList.isEmpty()) {
+                // the active proxy was among the dead ones — fall back to the
+                // best remaining one so the connection stays up
+                SharedConfig.ProxyInfo best = null;
+                for (SharedConfig.ProxyInfo info : SharedConfig.proxyList) {
+                    if (info.available && (best == null || info.ping < best.ping)) {
+                        best = info;
+                    }
+                }
+                if (best == null) {
+                    best = SharedConfig.proxyList.get(0);
+                }
+                SharedConfig.currentProxy = best;
+                SharedPreferences.Editor editor = MessagesController.getGlobalMainSettings().edit();
+                best.settings.toSharedPreferences(editor);
+                editor.putBoolean("proxy_enabled", true);
+                editor.commit();
+                ConnectionsManager.setProxySettings(true, best.settings);
+            }
+            useProxySettings = wasEnabled && SharedConfig.currentProxy != null;
+            NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.proxySettingsChanged);
+            NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
+            NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
+            updateRows(true);
+            if (listAdapter != null) {
+                listAdapter.notifyItemChanged(useProxyRow, ListAdapter.PAYLOAD_CHECKED_CHANGED);
+            }
+        });
+        AlertDialog dialog = builder.create();
+        showDialog(dialog);
+        TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
+        }
+    }
+    // =============== end Tele iOS: proxy tools ===============
 
     @Override
     protected void onDialogDismiss(Dialog dialog) {
@@ -879,6 +1256,10 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     if (position == webSocketDomainRow) {
                         String domain = MessagesController.getGlobalMainSettings().getString("webSocketDomain", "");
                         textCell.setTextAndValue(getString(R.string.WebSocketDomain), domain.isEmpty() ? getString(R.string.WebSocketDomainAuto) : domain, false);
+                    } else if (position == sortRow) {
+                        // Tele iOS: current "Sort By" mode
+                        int sortMode = MessagesController.getGlobalMainSettings().getInt("forkProxySortMode", SORT_MODE_PING);
+                        textCell.setTextAndValue(getString(R.string.SortBy), getString(sortMode == SORT_MODE_DATE_ADDED ? R.string.ProxySortByDateAdded : R.string.ProxySortByPing), true);
                     } else if (position == proxyAddRow) {
                         textCell.setText(getString(R.string.AddProxy), deleteAllRow != -1);
                     } else if (position == deleteAllRow) {
@@ -899,7 +1280,10 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     if (position == webSocketRow) {
                         checkCell.setTextAndCheck(getString(R.string.WebSocketTransport), MessagesController.getGlobalMainSettings().getBoolean("webSocketTransport", false), webSocketDomainRow != -1);
                     } else if (position == useProxyRow) {
-                        checkCell.setTextAndCheck(getString(R.string.UseProxySettings), useProxySettings, rotationRow != -1);
+                        checkCell.setTextAndCheck(getString(R.string.UseProxySettings), useProxySettings, vpnBypassRow != -1);
+                    } else if (position == vpnBypassRow) {
+                        // Tele iOS
+                        checkCell.setTextAndCheck(getString(R.string.ProxyDisableOnVpn), ForkProxyVpnController.isEnabled(), rotationRow != -1);
                     } else if (position == rotationRow) {
                         checkCell.setTextAndCheck(getString(R.string.UseProxyRotation), SharedConfig.proxyRotationEnabled, true);
                     }
@@ -973,6 +1357,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 int position = holder.getAdapterPosition();
                 if (position == useProxyRow) {
                     checkCell.setChecked(useProxySettings);
+                } else if (position == vpnBypassRow) {
+                    checkCell.setChecked(ForkProxyVpnController.isEnabled());
                 } else if (position == rotationRow) {
                     checkCell.setChecked(SharedConfig.proxyRotationEnabled);
                 }
@@ -982,7 +1368,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position == webSocketRow || position == webSocketDomainRow || position == useProxyRow || position == rotationRow || position == proxyAddRow || position == deleteAllRow || position >= proxyStartRow && position < proxyEndRow;
+            return position == webSocketRow || position == webSocketDomainRow || position == useProxyRow || position == vpnBypassRow || position == sortRow || position == rotationRow || position == proxyAddRow || position == deleteAllRow || position >= proxyStartRow && position < proxyEndRow;
         }
 
         @Override
@@ -1038,6 +1424,10 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return -3;
             } else if (position == useProxyRow) {
                 return -4;
+            } else if (position == vpnBypassRow) {
+                return -12;
+            } else if (position == sortRow) {
+                return -13;
             } else if (position == connectionsHeaderRow) {
                 return -6;
             } else if (position == deleteAllRow) {
@@ -1065,9 +1455,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return VIEW_TYPE_INFO;
             } else if (position == useProxyShadowRow || position == proxyShadowRow) {
                 return VIEW_TYPE_SHADOW;
-            } else if (position == proxyAddRow || position == deleteAllRow) {
+            } else if (position == proxyAddRow || position == deleteAllRow || position == sortRow) {
                 return VIEW_TYPE_TEXT_SETTING;
-            } else if (position == useProxyRow || position == rotationRow) {
+            } else if (position == useProxyRow || position == vpnBypassRow || position == rotationRow) {
                 return VIEW_TYPE_TEXT_CHECK;
             } else if (position == connectionsHeaderRow) {
                 return VIEW_TYPE_HEADER;

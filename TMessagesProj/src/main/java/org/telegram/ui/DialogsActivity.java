@@ -726,6 +726,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private final static int remove_from_folder = 110;
     private final static int community_ungroup = 111;
     private final static int profileInfo = 112;
+    private final static int fork_hide = 113;
 
     private final static int ARCHIVE_ITEM_STATE_PINNED = 0;
     private final static int ARCHIVE_ITEM_STATE_SHOWED = 1;
@@ -3678,6 +3679,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             editButton.setBackground(editCapsuleBg);
             editButton.setPadding(dp(14), 0, dp(14), 0);
             editButton.setOnClickListener(v -> presentFragment(new FiltersSetupActivity()));
+            // Forkgram: long-press the Edit capsule to unlock the hidden chats list
+            editButton.setOnLongClickListener(v -> {
+                ForkHiddenChats.openHiddenChats(this);
+                return true;
+            });
             editContainer.addView(editButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 34, Gravity.LEFT));
             actionBar.addView(editContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
 
@@ -4281,7 +4287,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         undoView.showWithAction(did, UndoView.ACTION_REMOVED_FROM_FOLDER, neverShow.size(), filter, null, null);
                     }
                     hideActionMode(false);
-                } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2 || id == profileInfo) {
+                } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2 || id == profileInfo || id == fork_hide) {
                     performSelectedDialogsAction(selectedDialogs, id, true, false);
                 }
             }
@@ -7022,6 +7028,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         clearItem = otherItem.addSubItem(clear, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
         blockItem = otherItem.addSubItem(block, R.drawable.msg_block, LocaleController.getString(R.string.BlockUser));
         profileInfoItem = otherItem.addSubItem(profileInfo, R.drawable.msg_message, LocaleController.getString(R.string.Info));
+        otherItem.addSubItem(fork_hide, R.drawable.menu_hide_from_profile, LocaleController.getString(R.string.ForkgramHideChat));
 
         muteItem.setOnLongClickListener(e -> {
             performSelectedDialogsAction(selectedDialogs, mute, true, true);
@@ -9596,6 +9603,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
                 return;
             }
+        } else if (action == fork_hide) {
+            ForkHiddenChats.hideDialogs(this, new ArrayList<>(selectedDialogs), () -> {
+                if (viewPages != null) {
+                    for (int a = 0; a < viewPages.length; a++) {
+                        viewPages[a].dialogsAdapter.notifyDataSetChanged();
+                    }
+                }
+            });
+            hideActionMode(false);
         } else if (action == community_ungroup) {
             if (alert) {
                 AlertsCreator.showSimpleConfirmAlert(this,
@@ -11473,6 +11489,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     @NonNull
     public ArrayList<TLRPC.Dialog> getDialogsArray(int currentAccount, int dialogsType, int folderId, boolean frozen) {
+        ArrayList<TLRPC.Dialog> array = getDialogsArrayInternal(currentAccount, dialogsType, folderId, frozen);
+        // Forkgram: hidden dialogs never appear in chat lists (the blocked-chats list is an exception)
+        if (dialogsType != DIALOGS_TYPE_BLOCK) {
+            array = ForkHiddenChats.filterHidden(currentAccount, array);
+        }
+        return array;
+    }
+
+    private ArrayList<TLRPC.Dialog> getDialogsArrayInternal(int currentAccount, int dialogsType, int folderId, boolean frozen) {
         if (frozen && frozenDialogsList != null) {
             return frozenDialogsList;
         }

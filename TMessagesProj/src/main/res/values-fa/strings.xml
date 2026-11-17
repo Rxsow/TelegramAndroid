@@ -336,4 +336,23 @@
     <string name="ProxyNothingToExport">پروکسی‌ای برای ذخیره وجود ندارد</string>
     <string name="ProxyCopiedAll">همه پروکسی‌ها کپی شد</string>
     <string name="ProxyNoUnavailable">همه پروکسی‌ها فعال هستند</string>
+
+    <!-- Forkgram: چت‌های پنهان -->
+    <string name="ForkgramHideChat">پنهان کردن چت</string>
+    <string name="ForkgramHiddenChats">چت‌های پنهان</string>
+    <string name="ForkgramHiddenChatsEmpty">چت پنهانی ندارید</string>
+    <string name="ForkgramSetPinTitle">تنظیم رمز</string>
+    <string name="ForkgramSetPinText">یک رمز ۴ رقمی برای محافظت از چت‌های پنهان انتخاب کنید</string>
+    <string name="ForkgramConfirmPinText">رمز ۴ رقمی را تکرار کنید</string>
+    <string name="ForkgramEnterPinTitle">چت‌های پنهان</string>
+    <string name="ForkgramEnterPinText">رمز ۴ رقمی خود را وارد کنید</string>
+    <string name="ForkgramWrongPin">رمز اشتباه است</string>
+    <string name="ForkgramPinsDontMatch">رمزها یکسان نیستند. دوباره تلاش کنید</string>
+    <string name="ForkgramPinMustBe4">رمز باید دقیقاً ۴ رقم باشد</string>
+    <string name="ForkgramChatHidden">چت پنهان شد. برای دیدن آن، دکمه Edit را نگه دارید</string>
+    <string name="ForkgramChatsHidden">%d چت پنهان شد. برای دیدن آن‌ها دکمه Edit را نگه دارید</string>
+    <string name="ForkgramNoHiddenChatsYet">هنوز چت پنهانی وجود ندارد</string>
+    <string name="ForkgramUnhide">آشکار کردن</string>
+    <string name="ForkgramOpenChat">باز کردن گفتگو</string>
+    <string name="ForkgramUnknownChat">گفتگوی ناشناخته</string>
 </resources>

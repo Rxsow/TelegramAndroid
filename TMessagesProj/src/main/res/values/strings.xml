@@ -12001,4 +12001,23 @@
     <string name="ContactChangesEmpty">No contact changes recorded yet.\nWhen a contact changes their name, username, bio, phone number or photo, the change is reported here.</string>
     <string name="ContactChangesCount">%1$d changes</string>
     <string name="ContactChangesClear">Clear history</string>
+
+    <!-- Forkgram: hidden chats -->
+    <string name="ForkgramHideChat">Hide chat</string>
+    <string name="ForkgramHiddenChats">Hidden chats</string>
+    <string name="ForkgramHiddenChatsEmpty">No hidden chats</string>
+    <string name="ForkgramSetPinTitle">Set PIN</string>
+    <string name="ForkgramSetPinText">Choose a 4-digit PIN to protect your hidden chats</string>
+    <string name="ForkgramConfirmPinText">Repeat the 4-digit PIN</string>
+    <string name="ForkgramEnterPinTitle">Hidden chats</string>
+    <string name="ForkgramEnterPinText">Enter your 4-digit PIN</string>
+    <string name="ForkgramWrongPin">Wrong PIN</string>
+    <string name="ForkgramPinsDontMatch">PINs do not match. Try again</string>
+    <string name="ForkgramPinMustBe4">The PIN must be exactly 4 digits</string>
+    <string name="ForkgramChatHidden">Chat hidden. Long-press the Edit button to see it</string>
+    <string name="ForkgramChatsHidden">%d chats hidden. Long-press the Edit button to see them</string>
+    <string name="ForkgramNoHiddenChatsYet">There are no hidden chats yet</string>
+    <string name="ForkgramUnhide">Unhide</string>
+    <string name="ForkgramOpenChat">Open chat</string>
+    <string name="ForkgramUnknownChat">Unknown chat</string>
 </resources>

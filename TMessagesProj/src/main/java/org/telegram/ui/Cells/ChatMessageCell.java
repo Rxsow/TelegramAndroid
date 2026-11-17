@@ -1746,6 +1746,35 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     public int signWidth;
     private CharSequence currentTimeString;
     private boolean drawTime = true;
+
+    // Forkgram: file size shown next to the time for photos, voice messages and GIFs
+    private CharSequence getForkMediaSizeSuffix(MessageObject messageObject) {
+        if (messageObject == null || messageObject.scheduled || messageObject.notime) {
+            return null;
+        }
+        long size = 0;
+        if (messageObject.isVoice() || messageObject.isGif()) {
+            TLRPC.Document document = messageObject.getDocument();
+            if (document != null) {
+                size = document.size;
+            }
+        } else if (messageObject.type == MessageObject.TYPE_PHOTO) {
+            TLRPC.MessageMedia media = MessageObject.getMedia(messageObject.messageOwner);
+            if (media instanceof TLRPC.TL_messageMediaPhoto && media.photo != null) {
+                for (int a = 0, N = media.photo.sizes.size(); a < N; a++) {
+                    TLRPC.PhotoSize photoSize = media.photo.sizes.get(a);
+                    if (photoSize != null && photoSize.size > 0) {
+                        size = Math.max(size, photoSize.size);
+                    }
+                }
+            }
+        }
+        if (size <= 0) {
+            return null;
+        }
+        return AndroidUtilities.formatFileSize(size);
+    }
+
     private boolean forceNotDrawTime;
     private Paint drillHolePaint;
     private Path drillHolePath;
@@ -18589,6 +18618,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             }
         } else {
             currentTimeString = timeString;
+        }
+        // Forkgram: append the media file size (photos, voice messages, GIFs)
+        CharSequence forkMediaSizeSuffix = getForkMediaSizeSuffix(currentMessageObject);
+        if (forkMediaSizeSuffix != null) {
+            currentTimeString = TextUtils.concat(currentTimeString, " ", forkMediaSizeSuffix);
         }
         if (currentMessageObject.isStakedDice()) {
             currentTimeString = TextUtils.concat("💎", StarsIntroActivity.formatTON(currentMessageObject.getStakedDiceAmount()), "  ", currentTimeString);

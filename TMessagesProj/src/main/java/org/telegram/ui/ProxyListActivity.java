@@ -885,7 +885,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             writer.write(text);
             writer.write("\n");
             writer.close();
-            BulletinFactory.of(this).createSimpleBulletin(R.raw.done, getString(R.string.ProxyExportDone, file.getAbsolutePath())).show();
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.done, LocaleController.formatString(R.string.ProxyExportDone, file.getAbsolutePath())).show();
         } catch (Exception e) {
             FileLog.e(e);
             BulletinFactory.of(this).createErrorBulletin(getString(R.string.ProxyExportError)).show();
@@ -976,7 +976,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
         updateRows(true);
-        BulletinFactory.of(this).createSimpleBulletin(R.raw.done, getString(R.string.ProxyImportDone, added, duplicates)).show();
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.done, LocaleController.formatString(R.string.ProxyImportDone, added, duplicates)).show();
     }
 
     /**
@@ -1061,7 +1061,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
         builder.setTitle(getString(R.string.ProxyDeleteUnavailable));
-        builder.setMessage(getString(R.string.ProxyDeleteUnavailableConfirm, toDelete.size()));
+        builder.setMessage(LocaleController.formatString(R.string.ProxyDeleteUnavailableConfirm, toDelete.size()));
         builder.setNegativeButton(getString(R.string.Cancel), null);
         builder.setPositiveButton(getString(R.string.Delete), (dialog, which) -> {
             boolean wasEnabled = MessagesController.getGlobalMainSettings().getBoolean("proxy_enabled", false);

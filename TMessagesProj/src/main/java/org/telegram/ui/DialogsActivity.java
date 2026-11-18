@@ -9612,6 +9612,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             });
             hideActionMode(false);
+            // must return: hideActionMode already cleared selectedDialogs, so the
+            // shared tail below (which still iterates the old count) would call
+            // get(0) on the now-empty list and crash with IndexOutOfBoundsException
+            return;
         } else if (action == community_ungroup) {
             if (alert) {
                 AlertsCreator.showSimpleConfirmAlert(this,

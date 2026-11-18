@@ -739,7 +739,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         {
             items.add(UItem.asShadow(null));
             items.add(UItem.asHeader("Tele iOS"));
-            items.add(SettingCell.Factory.of(98, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_fork, getString(R.string.ForkSettingsTitle)));
+            items.add(SettingCell.Factory.of(98, 0, 0, R.drawable.settings_fork_logo, getString(R.string.ForkSettingsTitle)));
             items.add(SettingCell.Factory.of(99, IconBackgroundColors.BLUE_DEEP.top, IconBackgroundColors.BLUE_DEEP.bottom, R.drawable.settings_check_update, getString(R.string.ForkCheckUpdate)));
         }
 

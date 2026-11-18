@@ -24,8 +24,8 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Cells.BackupImageView;
 import org.telegram.ui.Components.AvatarDrawable;
+import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
 
@@ -180,7 +180,7 @@ public class ForkHiddenChatsActivity extends BaseFragment {
         }
 
         @Override
-        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+        public RecyclerListView.Holder onCreateViewHolder(ViewGroup parent, int viewType) {
             FrameLayout row = new FrameLayout(mContext);
             row.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ROUNDRECT_6DP));
 

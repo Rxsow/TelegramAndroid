@@ -11,6 +11,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.TLRPC;
@@ -199,7 +200,7 @@ public class ForkHiddenChats {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alertDialog = builder.create();
         alertDialog.setOnShowListener(d -> {
-            Button button = alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button button = (Button) alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
             if (button != null) {
                 button.setOnClickListener(v -> {
                     String pin = editText.getText().toString();

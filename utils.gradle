@@ -1,6 +1,10 @@
 
 def getVersionName = {
-    return APP_VERSION_NAME + "." + ADDITIONAL_BUILD_NUMBER
+    // Tele iOS: CI builds append the GitHub run number so two actions builds can
+    // never be confused by looking at the version in App info or the settings footer
+    def runNumber = System.getenv("GITHUB_RUN_NUMBER")
+    def suffix = runNumber != null ? "-" + runNumber : ""
+    return APP_VERSION_NAME + "." + ADDITIONAL_BUILD_NUMBER + suffix
 }
 
 def getVersionCode = {

@@ -91,11 +91,37 @@ public class ForkHiddenChats {
         return filtered;
     }
 
+    /**
+     * Tele iOS: lightweight breadcrumb trail for the hide flow, appended to
+     * fork_debug.txt in the app's external files dir; lets a "silent" crash be
+     * pinpointed to the exact step even when no Java stack trace is produced.
+     */
+    private static void trace(String what) {
+        try {
+            android.content.Context ctx = ApplicationLoader.applicationContext;
+            if (ctx == null) {
+                return;
+            }
+            java.io.File dir = ctx.getExternalFilesDir(null);
+            if (dir == null) {
+                return;
+            }
+            java.io.File f = new java.io.File(dir, "fork_debug.txt");
+            if (f.length() > 256 * 1024) {
+                f.delete();
+            }
+            java.io.FileWriter w = new java.io.FileWriter(f, true);
+            w.write(new java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS", java.util.Locale.US).format(new java.util.Date()) + " " + what + "\n");
+            w.close();
+        } catch (Throwable ignored) {}
+    }
+
     public static void hideDialogs(BaseFragment fragment, ArrayList<Long> dialogIds, Runnable onDone) {
         if (fragment == null || dialogIds == null || dialogIds.isEmpty()) {
             return;
         }
         int account = fragment.getCurrentAccount();
+        trace("hideDialogs count=" + dialogIds.size() + " hasPin=" + hasPin(account));
         if (!hasPin(account)) {
             showSetPinDialog(fragment, () -> doHide(fragment, dialogIds, onDone));
         } else {
@@ -105,16 +131,21 @@ public class ForkHiddenChats {
 
     private static void doHide(BaseFragment fragment, ArrayList<Long> dialogIds, Runnable onDone) {
         int account = fragment.getCurrentAccount();
+        trace("doHide ids=" + dialogIds.size());
         Set<Long> ids = new HashSet<>(getHiddenIds(account));
         ids.addAll(dialogIds);
         saveIds(account, ids);
+        trace("doHideSaved");
         if (onDone != null) {
+            trace("onDoneStart");
             onDone.run();
+            trace("onDoneEnd");
         }
         CharSequence text = dialogIds.size() == 1
                 ? LocaleController.getString(R.string.ForkgramChatHidden)
                 : LocaleController.formatString("ForkgramChatsHidden", R.string.ForkgramChatsHidden, dialogIds.size());
         BulletinFactory.of(fragment).createSimpleBulletin(R.raw.done, text).show();
+        trace("bulletinShown");
     }
 
     /**
@@ -125,6 +156,7 @@ public class ForkHiddenChats {
             return;
         }
         int account = fragment.getCurrentAccount();
+        trace("openHiddenChats hasPin=" + hasPin(account));
         if (!hasPin(account)) {
             if (getHiddenIds(account).isEmpty()) {
                 BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, LocaleController.getString(R.string.ForkgramNoHiddenChatsYet)).show();
@@ -139,8 +171,10 @@ public class ForkHiddenChats {
                 pin -> {
                     String storedHash = prefs(account).getString("pin_hash", null);
                     if (storedHash != null && hashPin(pin).equals(storedHash)) {
+                        trace("pinVerified");
                         presentHiddenChats(fragment);
                     } else {
+                        trace("wrongPin");
                         showWrongPinAlert(fragment);
                     }
                 });
@@ -169,8 +203,10 @@ public class ForkHiddenChats {
                         confirmed -> {
                             if (hashPin(confirmed).equals(hashPin(pin))) {
                                 prefs(fragment.getCurrentAccount()).edit().putString("pin_hash", hashPin(pin)).apply();
+                                trace("pinSaved");
                                 onSet.run();
                             } else {
+                                trace("pinMismatch");
                                 BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, LocaleController.getString(R.string.ForkgramPinsDontMatch)).show();
                                 showSetPinDialog(fragment, onSet);
                             }
@@ -208,6 +244,7 @@ public class ForkHiddenChats {
                     String pin = editText.getText().toString();
                     if (pin.length() == 4) {
                         alertDialog.dismiss();
+                        trace("pinAccepted");
                         onPin.accept(pin);
                     } else {
                         editText.setError(LocaleController.getString(R.string.ForkgramPinMustBe4));
@@ -215,7 +252,9 @@ public class ForkHiddenChats {
                 });
             }
         });
+        trace("pinDialogShow");
         fragment.showDialog(alertDialog);
+        trace("pinDialogShown");
     }
 
     private static String hashPin(String pin) {

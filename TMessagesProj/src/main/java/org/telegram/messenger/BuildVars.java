@@ -51,38 +51,6 @@ public class BuildVars {
             SharedPreferences sharedPreferences = ApplicationLoader.applicationContext.getSharedPreferences("systemConfig", Context.MODE_PRIVATE);
             LOGS_ENABLED = DEBUG_VERSION || sharedPreferences.getBoolean("logsEnabled", DEBUG_VERSION);
             LOGS_ENABLED = sharedPreferences.getBoolean("logsEnabled", false);
-            // Tele iOS: any uncaught Java crash now also lands in a plain file
-            // (Android/data/<package>/files/crash_log.txt) so a silent-looking
-            // crash leaves readable evidence even when logging is off
-            final Thread.UncaughtExceptionHandler pastHandler = Thread.getDefaultUncaughtExceptionHandler();
-            Thread.setDefaultUncaughtExceptionHandler((thread, exception) -> {
-                try {
-                    java.io.File dir = ApplicationLoader.applicationContext.getExternalFilesDir(null);
-                    if (dir != null) {
-                        java.io.File f = new java.io.File(dir, "crash_log.txt");
-                        java.io.FileWriter w = new java.io.FileWriter(f, true);
-                        w.write(new java.util.Date().toString() + " | " + thread.getName() + "\n");
-                        w.write(exception.getClass().getName());
-                        if (exception.getMessage() != null) {
-                            w.write(": " + exception.getMessage());
-                        }
-                        w.write("\n");
-                        StackTraceElement[] stack = exception.getStackTrace();
-                        for (int i = 0; i < Math.min(stack.length, 14); i++) {
-                            w.write("  at " + stack[i] + "\n");
-                        }
-                        if (exception.getCause() != null) {
-                            w.write("cause: " + exception.getCause().getClass().getName() + ": " + exception.getCause().getMessage() + "\n");
-                        }
-                        w.write("\n");
-                        w.close();
-                    }
-                } catch (Exception ignored) {}
-                FileLog.fatal(exception, false);
-                if (pastHandler != null) {
-                    pastHandler.uncaughtException(thread, exception);
-                }
-            });
         }
 
         BUILD_VERSION_STRING = BuildConfig.VERSION_NAME;

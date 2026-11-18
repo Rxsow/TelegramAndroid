@@ -324,6 +324,47 @@ public class ApplicationLoader extends Application {
         super();
     }
 
+    // Tele iOS: the crash logger used to live in BuildVars' static block, which never
+    // ran when BuildVars got class-initialized before the application context existed,
+    // silently leaving the app without crash_log.txt; installed here from onCreate so
+    // every uncaught Java crash appends evidence with the exact build that crashed
+    private static void installCrashLogHandler() {
+        final Thread.UncaughtExceptionHandler pastHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, exception) -> {
+            try {
+                java.io.File dir = applicationContext.getExternalFilesDir(null);
+                if (dir == null) {
+                    dir = applicationContext.getFilesDir();
+                }
+                if (dir != null) {
+                    java.io.File f = new java.io.File(dir, "crash_log.txt");
+                    java.io.FileWriter w = new java.io.FileWriter(f, true);
+                    w.write(new java.util.Date().toString() + " | " + thread.getName() + " | build " + BuildVars.BUILD_VERSION_STRING + "\n");
+                    w.write(exception.getClass().getName());
+                    if (exception.getMessage() != null) {
+                        w.write(": " + exception.getMessage());
+                    }
+                    w.write("\n");
+                    StackTraceElement[] stack = exception.getStackTrace();
+                    for (int i = 0; i < Math.min(stack.length, 14); i++) {
+                        w.write("  at " + stack[i] + "\n");
+                    }
+                    if (exception.getCause() != null) {
+                        w.write("cause: " + exception.getCause().getClass().getName() + ": " + exception.getCause().getMessage() + "\n");
+                    }
+                    w.write("\n");
+                    w.close();
+                }
+            } catch (Throwable ignored) {}
+            try {
+                FileLog.fatal(exception, false);
+            } catch (Throwable ignored) {}
+            if (pastHandler != null) {
+                pastHandler.uncaughtException(thread, exception);
+            }
+        });
+    }
+
     @Override
     public void onCreate() {
         applicationLoaderInstance = this;
@@ -367,6 +408,8 @@ public class ApplicationLoader extends Application {
         if (applicationContext == null) {
             applicationContext = getApplicationContext();
         }
+
+        installCrashLogHandler();
 
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
 

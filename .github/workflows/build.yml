@@ -100,6 +100,24 @@ jobs:
           echo "--- collected files ---"
           ls -la apk_out
 
+      - name: Collect R8 mapping
+        run: |
+          mkdir -p mapping_out
+          find TMessagesProj TMessagesProj_App -name 'mapping.txt' | while read f; do
+            rel=$(echo "$f" | sed 's|/|_|g')
+            cp "$f" "mapping_out/$rel"
+            echo "collected: $f"
+          done
+          ls -la mapping_out
+
+      - name: Upload R8 mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: Forkgram-iOS-R8-Mapping
+          path: mapping_out/*
+          if-no-files-found: ignore
+          compression-level: 9
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

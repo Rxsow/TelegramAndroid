@@ -6,9 +6,9 @@ import android.text.InputFilter;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -200,7 +200,9 @@ public class ForkHiddenChats {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alertDialog = builder.create();
         alertDialog.setOnShowListener(d -> {
-            Button button = (Button) alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            // Telegram's custom AlertDialog builds its buttons as TextViews (getButton returns
+            // buttonsLayout.findViewWithTag), so casting to android.widget.Button crashes
+            TextView button = (TextView) alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
             if (button != null) {
                 button.setOnClickListener(v -> {
                     String pin = editText.getText().toString();

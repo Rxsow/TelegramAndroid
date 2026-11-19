@@ -345,6 +345,10 @@ public class ItemOptions {
         return add(iconResId, text, false, onClickListener);
     }
 
+    public ItemOptions add(int iconResId, CharSequence text, Runnable onClickListener, Runnable onLongClickListener) {
+        return add(iconResId, null, text, null, Theme.key_actionBarDefaultSubmenuItemIcon, Theme.key_actionBarDefaultSubmenuItem, onClickListener, onLongClickListener);
+    }
+
     public ItemOptions add(int iconResId, CharSequence text, CharSequence subtext, Runnable onClickListener) {
         return add(iconResId, null, text, subtext, Theme.key_actionBarDefaultSubmenuItemIcon, Theme.key_actionBarDefaultSubmenuItem, onClickListener);
     }
@@ -370,6 +374,10 @@ public class ItemOptions {
     }
 
     public ItemOptions add(int iconResId, Drawable iconDrawable, CharSequence text, CharSequence subtext, int iconColorKey, int textColorKey, Runnable onClickListener) {
+        return add(iconResId, iconDrawable, text, subtext, iconColorKey, textColorKey, onClickListener, null);
+    }
+
+    public ItemOptions add(int iconResId, Drawable iconDrawable, CharSequence text, CharSequence subtext, int iconColorKey, int textColorKey, Runnable onClickListener, Runnable onLongClickListener) {
         if (context == null) {
             return this;
         }
@@ -394,6 +402,12 @@ public class ItemOptions {
             }
             if (dismissWithButtons) dismiss();
         });
+        if (onLongClickListener != null) {
+            subItem.setOnLongClickListener(view1 -> {
+                onLongClickListener.run();
+                return true;
+            });
+        }
         if (minWidthDp > 0) {
             subItem.setMinimumWidth(dp(minWidthDp));
             addView(subItem, LayoutHelper.createLinear(minWidthDp, LayoutHelper.WRAP_CONTENT));

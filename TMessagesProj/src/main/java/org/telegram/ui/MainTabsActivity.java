@@ -669,7 +669,10 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                 } else if (!UserConfig.hasPremiumOnAccounts()) {
                     showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
                 }
-            });
+            }, HiddenAccountHelper.hasAnyHiddenAccounts() ? () -> {
+                o.dismiss();
+                presentFragment(new ForkHiddenAccountUnlockActivity());
+            } : null);
         }
 
         if (accountNumbers.size() > 0) {

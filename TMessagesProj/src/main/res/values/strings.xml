@@ -201,6 +201,9 @@
     <string name="ForkSettingsLock">Settings Lock</string>
     <string name="ForkSettingsLockInfo">Use a separate 4-digit code to open Tele iOS Settings. The code guards this settings screen only: clearing the app data or installing another build removes it.</string>
     <string name="ForkSettingsLockUnlockInfo">Enter the code to open Tele iOS Settings.</string>
+    <string name="ForkHiddenAccountUnlockTitle">Hidden account</string>
+    <string name="ForkHiddenAccountUnlockInfo">Enter the 4-digit unlock code of a hidden account. Unlock codes are set in Tele iOS Settings → Hidden accounts.</string>
+    <string name="ForkHiddenAccountUnlockCooldown">Too many attempts. Try again in %d seconds</string>
     <string name="ForkSettingsLockConfirmCurrentCodeInfo">Enter the current code to change or remove it.</string>
     <string name="ForkSettingsLockConfirmCodeInfo">Enter the code again to confirm.</string>
     <string name="ForkSettingsLockCodesDoNotMatch">Codes don\'t match. Enter a new code.</string>

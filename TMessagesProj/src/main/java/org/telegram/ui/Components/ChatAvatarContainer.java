@@ -169,6 +169,55 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable emojiStatusDrawable;
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable botVerificationDrawable;
 
+    // Tele iOS: fixed-width name/status capsule with marquee titles – long names
+    // scroll inside the capsule instead of resizing it (LTR names drift right,
+    // RTL names drift left)
+    private boolean forkMarqueeTitles;
+
+    public void setForkMarqueeTitles(boolean value) {
+        if (forkMarqueeTitles == value) {
+            return;
+        }
+        forkMarqueeTitles = value;
+        if (titleTextView != null) {
+            titleTextView.setScrollNonFitText(value);
+            titleTextView.setEllipsizeByGradient(!value);
+            applyForkMarqueeDirection(titleTextView, titleTextView.getText());
+        }
+        if (subtitleTextView != null) {
+            subtitleTextView.setScrollNonFitText(value);
+            subtitleTextView.setEllipsizeByGradient(!value);
+            applyForkMarqueeDirection(subtitleTextView, subtitleTextView.getText());
+        }
+        layoutIosTextCapsule();
+    }
+
+    private void applyForkMarqueeDirection(SimpleTextView view, CharSequence value) {
+        if (view == null) {
+            return;
+        }
+        view.setForkScrollReversed(!isRtlText(value));
+    }
+
+    private static boolean isRtlText(CharSequence value) {
+        if (value == null) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            byte direction = Character.getDirectionality(value.charAt(i));
+            if (direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT
+                    || direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC
+                    || direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT_EMBEDDING
+                    || direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT_OVERRIDE) {
+                return true;
+            }
+            if (direction == Character.DIRECTIONALITY_LEFT_TO_RIGHT) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     protected boolean useAnimatedSubtitle() {
         return false;
     }
@@ -940,6 +989,24 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             return;
         }
         layoutHeaderTexts();
+        // Tele iOS: marquee mode keeps the capsule at a fixed width spanning the
+        // container – long names scroll inside it instead of resizing the capsule
+        if (forkMarqueeTitles) {
+            int cl = dp(2);
+            int cr = width - dp(2);
+            int ct = titleTextView.getTop();
+            int cb = titleTextView.getBottom();
+            final View sub = getSubtitleTextView();
+            if (sub != null && sub.getVisibility() != GONE && sub.getAlpha() > 0.1f) {
+                cb = Math.max(cb, sub.getBottom() + dp(6));
+            }
+            if (cr <= cl || cb <= ct) {
+                return;
+            }
+            iosTextCapsuleView.layout(cl, ct, cr, cb);
+            iosCapsuleBounds.set(cl, ct, cr, cb);
+            return;
+        }
         final int titleW = titleTextView.getTextWidth();
         if (titleW <= 0) {
             iosTextCapsuleView.layout(0, 0, 0, 0);
@@ -1100,6 +1167,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             value = Emoji.replaceEmoji(value, titleTextView.getPaint().getFontMetricsInt(), false);
         }
         titleTextView.setText(value);
+        if (forkMarqueeTitles) {
+            applyForkMarqueeDirection(titleTextView, value);
+        }
         rightDrawableIsScam = false;
         if (scam || fake) {
             rightDrawableIsScam = true;
@@ -1166,6 +1236,9 @@ public class ChatAvatarContainer extends FrameLayout implements FactorAnimator.T
             }
         } else {
             lastSubtitle = value;
+        }
+        if (forkMarqueeTitles && subtitleTextView != null) {
+            applyForkMarqueeDirection(subtitleTextView, value);
         }
         checkActionBar(true);
         // Tele iOS: subtitle text changed — keep the capsule wrapped around it

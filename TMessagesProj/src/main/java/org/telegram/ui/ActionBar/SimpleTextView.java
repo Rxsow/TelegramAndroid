@@ -933,7 +933,9 @@ public class SimpleTextView extends View implements Drawable.Callback {
             rightDrawable2.draw(canvas);
             totalWidth += drawablePadding + dw;
         }
-        int nextScrollX = totalWidth + dp(DIST_BETWEEN_SCROLLING_TEXT);
+        // Tele iOS: the seamless-loop copy comes from the mirrored side when the
+        // marquee direction is reversed
+        int nextScrollX = (forkScrollReversed ? -1 : 1) * (totalWidth + dp(DIST_BETWEEN_SCROLLING_TEXT));
 
         if (scrollingOffset != 0) {
             if (leftDrawable != null && !leftDrawableOutside) {
@@ -1227,6 +1229,19 @@ public class SimpleTextView extends View implements Drawable.Callback {
             eff.draw(canvas);
     }
 
+    // Tele iOS: reversed marquee direction – the text drifts to the right
+    // (useful for LTR names inside an RTL-friendly header capsule)
+    private boolean forkScrollReversed;
+
+    public void setForkScrollReversed(boolean value) {
+        if (forkScrollReversed == value) {
+            return;
+        }
+        forkScrollReversed = value;
+        scrollingOffset = 0;
+        invalidate();
+    }
+
     private void updateScrollAnimation() {
         if (!scrollNonFitText || !textDoesNotFit && scrollingOffset == 0) {
             return;
@@ -1240,21 +1255,23 @@ public class SimpleTextView extends View implements Drawable.Callback {
             currentScrollDelay -= dt;
         } else {
             int totalDistance = totalWidth + dp(DIST_BETWEEN_SCROLLING_TEXT);
+            float offset = Math.abs(scrollingOffset);
             float pixelsPerSecond;
-            if (scrollingOffset < dp(SCROLL_SLOWDOWN_PX)) {
-                pixelsPerSecond = PIXELS_PER_SECOND_SLOW + (PIXELS_PER_SECOND - PIXELS_PER_SECOND_SLOW) * (scrollingOffset / dp(SCROLL_SLOWDOWN_PX));
-            } else if (scrollingOffset >= totalDistance - dp(SCROLL_SLOWDOWN_PX)) {
-                float dist = scrollingOffset - (totalDistance - dp(SCROLL_SLOWDOWN_PX));
+            if (offset < dp(SCROLL_SLOWDOWN_PX)) {
+                pixelsPerSecond = PIXELS_PER_SECOND_SLOW + (PIXELS_PER_SECOND - PIXELS_PER_SECOND_SLOW) * (offset / dp(SCROLL_SLOWDOWN_PX));
+            } else if (offset >= totalDistance - dp(SCROLL_SLOWDOWN_PX)) {
+                float dist = offset - (totalDistance - dp(SCROLL_SLOWDOWN_PX));
                 pixelsPerSecond = PIXELS_PER_SECOND - (PIXELS_PER_SECOND - PIXELS_PER_SECOND_SLOW) * (dist / dp(SCROLL_SLOWDOWN_PX));
             } else {
                 pixelsPerSecond = PIXELS_PER_SECOND;
             }
-            scrollingOffset += dt / 1000.0f * dp(pixelsPerSecond);
+            offset += dt / 1000.0f * dp(pixelsPerSecond);
             lastUpdateTime = newUpdateTime;
-            if (scrollingOffset > totalDistance) {
-                scrollingOffset = 0;
+            if (offset > totalDistance) {
+                offset = 0;
                 currentScrollDelay = SCROLL_DELAY_MS;
             }
+            scrollingOffset = forkScrollReversed ? -offset : offset;
             checkUi_layerType();
         }
         invalidate();

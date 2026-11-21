@@ -502,6 +502,8 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         }
         subtitleTextView = new SimpleTextView(getContext());
         subtitleTextView.setGravity(Gravity.LEFT);
+        // Tele iOS: the status line scrolls inside its fixed area instead of fading out
+        subtitleTextView.setScrollNonFitText(true);
         subtitleTextView.setVisibility(GONE);
         subtitleTextView.setTextColor(getThemedColor(Theme.key_actionBarDefaultSubtitle));
         addView(subtitleTextView, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
@@ -544,9 +546,30 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
             subtitleTextView.setAlpha(1f);
             if (!isEmpty) {
                 subtitleTextView.setText(value);
+                subtitleTextView.setForkScrollReversed(!isRtlText(value));
             }
             subtitle = value;
         }
+    }
+
+    // Tele iOS: first strong-directional character decides the marquee drift
+    private static boolean isRtlText(CharSequence value) {
+        if (value == null) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            byte direction = Character.getDirectionality(value.charAt(i));
+            if (direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT
+                    || direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC
+                    || direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT_EMBEDDING
+                    || direction == Character.DIRECTIONALITY_RIGHT_TO_LEFT_OVERRIDE) {
+                return true;
+            }
+            if (direction == Character.DIRECTIONALITY_LEFT_TO_RIGHT) {
+                return false;
+            }
+        }
+        return false;
     }
 
     private void createTitleTextView(int i) {
@@ -555,6 +578,9 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         }
         titleTextView[i] = new SimpleTextView(getContext());
         titleTextView[i].setGravity(isCenterTitle ? Gravity.CENTER : Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        // Tele iOS: long names scroll inside the fixed header capsule (LTR names
+        // drift right, RTL names drift left) instead of being clipped
+        titleTextView[i].setScrollNonFitText(true);
         if (titleColorToSet != 0) {
             titleTextView[i].setTextColor(titleColorToSet);
         } else {
@@ -600,6 +626,7 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         if (titleTextView[0] != null) {
             titleTextView[0].setVisibility(value != null && !isSearchFieldVisible ? VISIBLE : INVISIBLE);
             titleTextView[0].setText(lastTitle = value);
+            titleTextView[0].setForkScrollReversed(value != null && !isRtlText(value));
             if (attached && lastRightDrawable instanceof AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable) {
                 ((AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable) lastRightDrawable).setParentView(null);
             }
@@ -1472,25 +1499,25 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 availableWidth = Math.max(availableWidth, 0);
 
                 if (((fromBottom && i == 0) || (!fromBottom && i == 1)) && overlayTitleAnimation && titleAnimationRunning) {
-                    titleTextView[i].setTextSize(glassMode ? 17 : !AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 18 : 20);
+                    titleTextView[i].setTextSize(glassMode ? 17 : !AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 16 : 17);
                 } else {
                     if (titleTextView[0] != null && titleTextView[0].getVisibility() != GONE && subtitleTextView != null && subtitleTextView.getVisibility() != GONE) {
                         if (titleTextView[i] != null) {
-                            titleTextView[i].setTextSize(glassMode ? 17 : AndroidUtilities.isTablet() ? 20 : 18);
+                            titleTextView[i].setTextSize(glassMode ? 17 : AndroidUtilities.isTablet() ? 20 : 17);
                         }
-                        subtitleTextView.setTextSize(AndroidUtilities.isTablet() ? 16 : 14);
+                        subtitleTextView.setTextSize(AndroidUtilities.isTablet() ? 16 : 13);
                         if (additionalSubtitleTextView != null) {
-                            additionalSubtitleTextView.setTextSize(AndroidUtilities.isTablet() ? 16 : 14);
+                            additionalSubtitleTextView.setTextSize(AndroidUtilities.isTablet() ? 16 : 13);
                         }
                     } else {
                         if (titleTextView[i] != null && titleTextView[i].getVisibility() != GONE) {
-                            titleTextView[i].setTextSize(glassMode ? 17 : !AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 18 : 20);
+                            titleTextView[i].setTextSize(glassMode ? 17 : !AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 16 : 17);
                         }
                         if (subtitleTextView != null && subtitleTextView.getVisibility() != GONE) {
-                            subtitleTextView.setTextSize(!AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 14 : 16);
+                            subtitleTextView.setTextSize(!AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 13 : 14);
                         }
                         if (additionalSubtitleTextView != null) {
-                            additionalSubtitleTextView.setTextSize(!AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 14 : 16);
+                            additionalSubtitleTextView.setTextSize(!AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 13 : 14);
                         }
                     }
                 }
@@ -1752,6 +1779,7 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 invalidate();
             }
             titleTextView[0].setText(textToSet);
+            titleTextView[0].setForkScrollReversed(title != null && !isRtlText(textToSet));
             titleTextView[0].setDrawablePadding(dp(4));
             titleTextView[0].setRightDrawable(rightDrawableToSet);
             titleTextView[0].setRightDrawableOnClick(rightDrawableOnClickListener);
@@ -1772,6 +1800,7 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
                 createTitleTextView(1);
             }
             titleTextView[1].setText(textToSet);
+            titleTextView[1].setForkScrollReversed(title != null && !isRtlText(textToSet));
             titleTextView[1].setDrawablePadding(dp(4));
             titleTextView[1].setRightDrawable(rightDrawableToSet);
             titleTextView[1].setRightDrawableOnClick(rightDrawableOnClickListener);

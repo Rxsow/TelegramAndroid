@@ -123,7 +123,15 @@ public class ForkHiddenChats {
         int account = fragment.getCurrentAccount();
         trace("hideDialogs count=" + dialogIds.size() + " hasPin=" + hasPin(account));
         if (!hasPin(account)) {
-            showSetPinDialog(fragment, () -> doHide(fragment, dialogIds, onDone));
+            // Tele iOS: first hide sets the PIN on a full-screen code page, not a dialog
+            fragment.presentFragment(new ForkCodeEntryActivity(
+                    LocaleController.getString(R.string.ForkgramSetPinTitle),
+                    LocaleController.getString(R.string.ForkgramSetPinText),
+                    (java.util.function.Consumer<String>) pin -> {
+                        prefs(account).edit().putString("pin_hash", hashPin(pin)).apply();
+                        trace("pinSaved");
+                        doHide(fragment, dialogIds, onDone);
+                    }));
         } else {
             doHide(fragment, dialogIds, onDone);
         }
@@ -149,7 +157,8 @@ public class ForkHiddenChats {
     }
 
     /**
-     * Long-press on the Edit capsule: gate the hidden chats list behind the PIN.
+     * Long-press on the Edit capsule: gate the hidden chats list behind the PIN
+     * on a full-screen code page (never a dialog).
      */
     public static void openHiddenChats(BaseFragment fragment) {
         if (fragment == null || fragment.getParentActivity() == null) {
@@ -161,100 +170,36 @@ public class ForkHiddenChats {
             if (getHiddenIds(account).isEmpty()) {
                 BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, LocaleController.getString(R.string.ForkgramNoHiddenChatsYet)).show();
             } else {
-                showSetPinDialog(fragment, () -> presentHiddenChats(fragment));
+                presentSetPin(fragment, account);
             }
             return;
         }
-        showPinInputDialog(fragment,
+        fragment.presentFragment(new ForkCodeEntryActivity(
                 LocaleController.getString(R.string.ForkgramEnterPinTitle),
                 LocaleController.getString(R.string.ForkgramEnterPinText),
                 pin -> {
                     String storedHash = prefs(account).getString("pin_hash", null);
-                    if (storedHash != null && hashPin(pin).equals(storedHash)) {
-                        trace("pinVerified");
-                        presentHiddenChats(fragment);
-                    } else {
-                        trace("wrongPin");
-                        showWrongPinAlert(fragment);
-                    }
-                });
+                    return storedHash != null && hashPin(pin).equals(storedHash);
+                },
+                () -> {
+                    trace("pinVerified");
+                    presentHiddenChats(fragment);
+                }));
+    }
+
+    private static void presentSetPin(BaseFragment fragment, int account) {
+        fragment.presentFragment(new ForkCodeEntryActivity(
+                LocaleController.getString(R.string.ForkgramSetPinTitle),
+                LocaleController.getString(R.string.ForkgramSetPinText),
+                (java.util.function.Consumer<String>) pin -> {
+                    prefs(account).edit().putString("pin_hash", hashPin(pin)).apply();
+                    trace("pinSaved");
+                    presentHiddenChats(fragment);
+                }));
     }
 
     private static void presentHiddenChats(BaseFragment fragment) {
         fragment.presentFragment(new ForkHiddenChatsActivity());
-    }
-
-    private static void showWrongPinAlert(BaseFragment fragment) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
-        builder.setTitle(LocaleController.getString(R.string.ForkgramEnterPinTitle));
-        builder.setMessage(LocaleController.getString(R.string.ForkgramWrongPin));
-        builder.setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> openHiddenChats(fragment));
-        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        fragment.showDialog(builder.create());
-    }
-
-    private static void showSetPinDialog(BaseFragment fragment, Runnable onSet) {
-        showPinInputDialog(fragment,
-                LocaleController.getString(R.string.ForkgramSetPinTitle),
-                LocaleController.getString(R.string.ForkgramSetPinText),
-                pin -> showPinInputDialog(fragment,
-                        LocaleController.getString(R.string.ForkgramSetPinTitle),
-                        LocaleController.getString(R.string.ForkgramConfirmPinText),
-                        confirmed -> {
-                            if (hashPin(confirmed).equals(hashPin(pin))) {
-                                prefs(fragment.getCurrentAccount()).edit().putString("pin_hash", hashPin(pin)).apply();
-                                trace("pinSaved");
-                                onSet.run();
-                            } else {
-                                trace("pinMismatch");
-                                BulletinFactory.of(fragment).createSimpleBulletin(R.raw.error, LocaleController.getString(R.string.ForkgramPinsDontMatch)).show();
-                                showSetPinDialog(fragment, onSet);
-                            }
-                        }));
-    }
-
-    private static void showPinInputDialog(BaseFragment fragment, CharSequence title, CharSequence message, Consumer<String> onPin) {
-        if (fragment.getParentActivity() == null) {
-            return;
-        }
-        android.content.Context context = fragment.getParentActivity();
-        FrameLayout container = new FrameLayout(context);
-        container.setPadding(AndroidUtilities.dp(28), AndroidUtilities.dp(12), AndroidUtilities.dp(28), 0);
-        EditText editText = new EditText(context);
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        editText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(4)});
-        editText.setGravity(Gravity.CENTER);
-        editText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
-        editText.setSingleLine(true);
-        container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(context, fragment.getResourceProvider());
-        builder.setTitle(title);
-        builder.setMessage(message);
-        builder.setView(container);
-        builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
-        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-        AlertDialog alertDialog = builder.create();
-        alertDialog.setOnShowListener(d -> {
-            // Telegram's custom AlertDialog builds its buttons as TextViews (getButton returns
-            // buttonsLayout.findViewWithTag), so casting to android.widget.Button crashes
-            TextView button = (TextView) alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            if (button != null) {
-                button.setOnClickListener(v -> {
-                    String pin = editText.getText().toString();
-                    if (pin.length() == 4) {
-                        alertDialog.dismiss();
-                        trace("pinAccepted");
-                        onPin.accept(pin);
-                    } else {
-                        editText.setError(LocaleController.getString(R.string.ForkgramPinMustBe4));
-                    }
-                });
-            }
-        });
-        trace("pinDialogShow");
-        fragment.showDialog(alertDialog);
-        trace("pinDialogShown");
     }
 
     private static String hashPin(String pin) {

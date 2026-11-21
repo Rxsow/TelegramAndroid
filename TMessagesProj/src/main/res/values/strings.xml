@@ -12035,4 +12035,9 @@
     <string name="ForkgramUnhide">Unhide</string>
     <string name="ForkgramOpenChat">Open chat</string>
     <string name="ForkgramUnknownChat">Unknown chat</string>
+    <string name="ForkgramFilterAll">All</string>
+    <string name="ForkgramFilterChannels">Channels</string>
+    <string name="ForkgramFilterGroups">Groups</string>
+    <string name="ForkgramFilterUsers">Personal</string>
+    <string name="ForkgramFilterBots">Bots</string>
 </resources>

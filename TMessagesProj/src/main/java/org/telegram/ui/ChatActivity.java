@@ -1494,7 +1494,7 @@ public class ChatActivity extends BaseFragment implements
         updatePinnedMessageView(true);
         updateVisibleRows();
         // Tele iOS: the anonymous share alert must also receive whole albums
-        messages = expandGroupedForward(messages);
+        expandGroupedForward(messages);
         showDialog(createShareAlert(getParentActivity(), messages, "", groupMedia, false, null));
     }
 
@@ -35888,10 +35888,11 @@ public class ChatActivity extends BaseFragment implements
 
     // Tele iOS: forwarding an album must carry every slide, not just the selected
     // one – expand any selected grouped message back to its full album group
-    // (deduped, ordered by message id) before the list is handed to the sender
-    private ArrayList<MessageObject> expandGroupedForward(ArrayList<MessageObject> in) {
+    // (deduped, ordered by message id) before the list is handed to the sender.
+    // Mutates the given list in place so callers keep it effectively final.
+    private void expandGroupedForward(ArrayList<MessageObject> in) {
         if (in == null || in.isEmpty()) {
-            return in;
+            return;
         }
         boolean hasGroup = false;
         for (int i = 0; i < in.size(); i++) {
@@ -35901,7 +35902,7 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         if (!hasGroup) {
-            return in;
+            return;
         }
         ArrayList<MessageObject> out = new ArrayList<>();
         HashSet<Integer> addedIds = new HashSet<>();
@@ -35926,7 +35927,8 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         Collections.sort(out, (a, b) -> a.getId() - b.getId());
-        return out;
+        in.clear();
+        in.addAll(out);
     }
 
     @Override
@@ -35958,7 +35960,7 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         // Tele iOS: forward whole albums even if the selection lost group members
-        fmessages = expandGroupedForward(fmessages);
+        expandGroupedForward(fmessages);
         for (int j = 0; j < dids.size(); j++) {
             TLRPC.Chat chat = getMessagesController().getChat(-dids.get(j).dialogId);
             if (chat != null) {

@@ -1747,32 +1747,65 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     private CharSequence currentTimeString;
     private boolean drawTime = true;
 
-    // Forkgram: file size shown next to the time for photos, voice messages and GIFs
+    // Forkgram: file size shown next to the time for voice messages and round
+    // video messages; photos and regular videos draw the Tele iOS corner pill
+    // (see forkSizeLayout) instead, so photos no longer append here
     private CharSequence getForkMediaSizeSuffix(MessageObject messageObject) {
         if (messageObject == null || messageObject.scheduled || messageObject.notime) {
             return null;
         }
         long size = 0;
-        if (messageObject.isVoice() || messageObject.isGif()) {
+        if (messageObject.isVoice() || messageObject.isRoundVideo()) {
             TLRPC.Document document = messageObject.getDocument();
             if (document != null) {
                 size = document.size;
-            }
-        } else if (messageObject.type == MessageObject.TYPE_PHOTO) {
-            TLRPC.MessageMedia media = MessageObject.getMedia(messageObject.messageOwner);
-            if (media instanceof TLRPC.TL_messageMediaPhoto && media.photo != null) {
-                for (int a = 0, N = media.photo.sizes.size(); a < N; a++) {
-                    TLRPC.PhotoSize photoSize = media.photo.sizes.get(a);
-                    if (photoSize != null && photoSize.size > 0) {
-                        size = Math.max(size, photoSize.size);
-                    }
-                }
             }
         }
         if (size <= 0) {
             return null;
         }
         return AndroidUtilities.formatFileSize(size);
+    }
+
+    // Tele iOS: file size pill over the media – top-left for photos and videos
+    // (each album slide draws its own), round video messages keep the size in
+    // the bottom-left time pill instead
+    private StaticLayout forkSizeLayout;
+    private int forkSizeWidth;
+    private long forkSizeValue = -1;
+
+    private void buildForkSizePill(MessageObject messageObject) {
+        if (messageObject == null || messageObject.scheduled || messageObject.notime) {
+            forkSizeLayout = null;
+            return;
+        }
+        long size = 0;
+        TLRPC.MessageMedia media = MessageObject.getMedia(messageObject.messageOwner);
+        if (messageObject.type == MessageObject.TYPE_PHOTO && media instanceof TLRPC.TL_messageMediaPhoto && media.photo != null) {
+            for (int a = 0, N = media.photo.sizes.size(); a < N; a++) {
+                TLRPC.PhotoSize photoSize = media.photo.sizes.get(a);
+                if (photoSize != null && photoSize.size > 0) {
+                    size = Math.max(size, photoSize.size);
+                }
+            }
+        } else if (messageObject.isVideo() && !messageObject.isRoundVideo() || messageObject.isGif()) {
+            TLRPC.Document document = messageObject.getDocument();
+            if (document != null) {
+                size = document.size;
+            }
+        }
+        if (size <= 0) {
+            forkSizeLayout = null;
+            forkSizeValue = -1;
+            return;
+        }
+        if (forkSizeLayout != null && size == forkSizeValue) {
+            return;
+        }
+        forkSizeValue = size;
+        String str = AndroidUtilities.formatFileSize(size);
+        forkSizeWidth = (int) Math.ceil(Theme.chat_durationPaint.measureText(str));
+        forkSizeLayout = new StaticLayout(str, Theme.chat_durationPaint, forkSizeWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
     }
 
     private boolean forceNotDrawTime;
@@ -18619,11 +18652,13 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         } else {
             currentTimeString = timeString;
         }
-        // Forkgram: append the media file size (photos, voice messages, GIFs)
+        // Forkgram: append the media file size (voice + round video messages)
         CharSequence forkMediaSizeSuffix = getForkMediaSizeSuffix(currentMessageObject);
         if (forkMediaSizeSuffix != null) {
             currentTimeString = TextUtils.concat(currentTimeString, " ", forkMediaSizeSuffix);
         }
+        // Tele iOS: build the corner size pill for photos and regular videos
+        buildForkSizePill(currentMessageObject);
         if (currentMessageObject.isStakedDice()) {
             currentTimeString = TextUtils.concat("💎", StarsIntroActivity.formatTON(currentMessageObject.getStakedDiceAmount()), "  ", currentTimeString);
             currentTimeString = StarsIntroActivity.replaceDiamond(currentTimeString, 0.55f, null, 0, dp(-.33f), 1.05f);
@@ -24574,6 +24609,32 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 canvas.save();
                 canvas.translate(x + (bigRadius ? 2 : 0), y);
                 SpoilerEffect.layoutDrawMaybe(videoInfoLayout, canvas);
+                canvas.restore();
+            }
+
+            // Tele iOS: file size pill over the media, top-left of every slide
+            // (photos and regular videos; round videos keep the size in the
+            // bottom-left time pill); hidden while spoilers or blurred preview
+            if (forkSizeLayout != null && photoImage.getVisible() && imageBackgroundSideColor == 0
+                    && !currentMessageObject.needDrawBluredPreview()
+                    && (!currentMessageObject.hasMediaSpoilers() || currentMessageObject.isMediaSpoilersRevealed)) {
+                float rad;
+                boolean pillBigRadius;
+                if (SharedConfig.bubbleRadius > 2) {
+                    rad = dp(SharedConfig.bubbleRadius - 2);
+                    pillBigRadius = SharedConfig.bubbleRadius >= 10;
+                } else {
+                    rad = dp(SharedConfig.bubbleRadius);
+                }
+
+                int x = (int) (photoImage.getImageX() + dp(9));
+                int y = (int) (photoImage.getImageY() + dp(6));
+                rect.set(x - dp(4), y - dp(1.5f), x + forkSizeWidth + dp(4) + dp(pillBigRadius ? 2 : 0), y + forkSizeLayout.getHeight() + dp(1.5f));
+                canvas.drawRoundRect(rect, rad, rad, getThemedPaint(Theme.key_paint_chatTimeBackground));
+
+                canvas.save();
+                canvas.translate(x + (pillBigRadius ? 2 : 0), y);
+                forkSizeLayout.draw(canvas);
                 canvas.restore();
             }
         }

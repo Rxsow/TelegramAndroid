@@ -18,6 +18,8 @@ import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
 
+import java.util.ArrayList;
+
 /**
  * Tele iOS: hidden-accounts management, opened from the gear in the account
  * menu. One global 4-digit code guards the feature; every activated account

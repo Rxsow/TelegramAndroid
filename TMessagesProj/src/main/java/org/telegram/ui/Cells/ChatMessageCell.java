@@ -24619,7 +24619,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     && !currentMessageObject.needDrawBluredPreview()
                     && (!currentMessageObject.hasMediaSpoilers() || currentMessageObject.isMediaSpoilersRevealed)) {
                 float rad;
-                boolean pillBigRadius;
+                boolean pillBigRadius = false;
                 if (SharedConfig.bubbleRadius > 2) {
                     rad = dp(SharedConfig.bubbleRadius - 2);
                     pillBigRadius = SharedConfig.bubbleRadius >= 10;

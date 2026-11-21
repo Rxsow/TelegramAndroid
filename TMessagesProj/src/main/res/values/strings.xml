@@ -12004,6 +12004,9 @@
     <string name="ContactChangesEmpty">No contact changes recorded yet.\nWhen a contact changes their name, username, bio, phone number or photo, the change is reported here.</string>
     <string name="ContactChangesCount">%1$d changes</string>
     <string name="ContactChangesClear">Clear history</string>
+    <string name="ContactChangesClearConfirm">Delete all recorded contact changes?</string>
+    <string name="ContactChangesViewTimeline">Timeline</string>
+    <string name="ContactChangesViewList">List</string>
 
     <!-- Forkgram: hidden chats -->
     <string name="ForkgramHideChat">Hide chat</string>

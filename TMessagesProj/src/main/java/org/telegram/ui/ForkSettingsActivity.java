@@ -1051,7 +1051,7 @@ public class ForkSettingsActivity extends BaseFragment {
         } else if (id == ID_CUSTOM_FONT) {
             showCustomFontDialog();
         } else if (id == ID_CONTACT_CHANGES) {
-            showContactChangesDialog();
+            presentFragment(new ForkContactChangesActivity());
         } else if (id == ID_NOTIFICATION_ICON) {
             try {
                 showNotificationIconDialog();

@@ -1493,6 +1493,8 @@ public class ChatActivity extends BaseFragment implements
         hideActionMode();
         updatePinnedMessageView(true);
         updateVisibleRows();
+        // Tele iOS: the anonymous share alert must also receive whole albums
+        messages = expandGroupedForward(messages);
         showDialog(createShareAlert(getParentActivity(), messages, "", groupMedia, false, null));
     }
 
@@ -35884,6 +35886,49 @@ public class ChatActivity extends BaseFragment implements
         }
     }
 
+    // Tele iOS: forwarding an album must carry every slide, not just the selected
+    // one – expand any selected grouped message back to its full album group
+    // (deduped, ordered by message id) before the list is handed to the sender
+    private ArrayList<MessageObject> expandGroupedForward(ArrayList<MessageObject> in) {
+        if (in == null || in.isEmpty()) {
+            return in;
+        }
+        boolean hasGroup = false;
+        for (int i = 0; i < in.size(); i++) {
+            if (in.get(i).getGroupId() != 0) {
+                hasGroup = true;
+                break;
+            }
+        }
+        if (!hasGroup) {
+            return in;
+        }
+        ArrayList<MessageObject> out = new ArrayList<>();
+        HashSet<Integer> addedIds = new HashSet<>();
+        for (int i = 0; i < in.size(); i++) {
+            MessageObject messageObject = in.get(i);
+            MessageObject.GroupedMessages groupedMessages = groupedMessagesMap.get(messageObject.getGroupId());
+            if (groupedMessages != null && !groupedMessages.messages.isEmpty()) {
+                boolean addedAny = false;
+                for (int k = 0; k < groupedMessages.messages.size(); k++) {
+                    MessageObject groupMessage = groupedMessages.messages.get(k);
+                    if (groupMessage != null && addedIds.add(groupMessage.getId())) {
+                        out.add(groupMessage);
+                        addedAny = true;
+                    }
+                }
+                if (addedAny) {
+                    continue;
+                }
+            }
+            if (addedIds.add(messageObject.getId())) {
+                out.add(messageObject);
+            }
+        }
+        Collections.sort(out, (a, b) -> a.getId() - b.getId());
+        return out;
+    }
+
     @Override
     public boolean didSelectDialogs(DialogsActivity fragment, ArrayList<MessagesStorage.TopicKey> dids, CharSequence message, boolean param, boolean notify, int scheduleDate, int scheduleRepeatPeriod, TopicsFragment topicsFragment) {
         if ((messagePreviewParams == null && (!fragment.isQuote || replyingMessageObject == null) || fragment.isQuote && replyingMessageObject == null) && forwardingMessage == null && selectedMessagesIds[0].size() == 0 && selectedMessagesIds[1].size() == 0) {
@@ -35912,6 +35957,8 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
         }
+        // Tele iOS: forward whole albums even if the selection lost group members
+        fmessages = expandGroupedForward(fmessages);
         for (int j = 0; j < dids.size(); j++) {
             TLRPC.Chat chat = getMessagesController().getChat(-dids.get(j).dialogId);
             if (chat != null) {

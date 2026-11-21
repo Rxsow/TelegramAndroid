@@ -1110,11 +1110,6 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
                 return;
             }
             if (!SharedConfig.checkPasscode(password)) {
-                if (HiddenAccountHelper.prepareHiddenUnlockFromPasscode(password) >= 0) {
-                    skipFingerprintOnce = true;
-                    finishPasscodeAccepted();
-                    return;
-                }
                 SharedConfig.increaseBadPasscodeTries();
                 if (SharedConfig.passcodeRetryInMs > 0) {
                     checkRetryTextView();

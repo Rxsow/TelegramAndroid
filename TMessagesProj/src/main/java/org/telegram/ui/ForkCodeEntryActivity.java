@@ -14,28 +14,42 @@ import android.widget.TextView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.UserConfig;
-import org.telegram.messenger.forkgram.HiddenAccountHelper;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
 
+import java.util.function.Consumer;
+
 /**
- * Full-screen page that reveals a hidden account by its 4-digit unlock code.
- * Opened by long-pressing the "Add account" row in the account selector.
+ * Tele iOS: generic full-screen 4-digit code page (never a dialog). Two modes:
+ * VERIFY – check against a caller-provided checker and run onVerified;
+ * SET – enter twice, then hand the confirmed code to onSet.
+ * Used for the hidden-accounts lock and the hidden-chats PIN.
  */
-public class ForkHiddenAccountUnlockActivity extends BaseFragment {
+public class ForkCodeEntryActivity extends BaseFragment {
 
     private static final int ATTEMPTS_PER_COOLDOWN = 5;
     private static final long COOLDOWN_MS = 30_000L;
 
-    private CodeFieldContainer codeContainer;
+    public interface CodeChecker {
+        boolean check(String code);
+    }
+
+    private final CharSequence pageTitle;
+    private final CharSequence infoText;
+    private final CodeChecker checker;
+    private final Runnable onVerified;
+    private final Consumer<String> onSet;
+    private final boolean setTitleMode;
+
+    private org.telegram.ui.CodeFieldContainer codeContainer;
     private TextView infoTextView;
     private TextView errorTextView;
     private int badAttempts;
     private long cooldownUntil;
-    private boolean unlocking;
+    private boolean completing;
+    private String firstSetCode;
 
     private final Runnable cooldownUpdater = new Runnable() {
         @Override
@@ -53,18 +67,30 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         }
     };
 
-    @Override
-    public boolean onFragmentCreate() {
-        if (!HiddenAccountHelper.hasAnyHiddenAccounts()) {
-            return false;
-        }
-        return super.onFragmentCreate();
+    /** Verify an existing code and continue once it matches. */
+    public ForkCodeEntryActivity(CharSequence pageTitle, CharSequence infoText, CodeChecker checker, Runnable onVerified) {
+        this.pageTitle = pageTitle;
+        this.infoText = infoText;
+        this.checker = checker;
+        this.onVerified = onVerified;
+        this.onSet = null;
+        this.setTitleMode = false;
+    }
+
+    /** Set a new code (entered twice) and continue with the confirmed code. */
+    public ForkCodeEntryActivity(CharSequence pageTitle, CharSequence infoText, Consumer<String> onSet) {
+        this.pageTitle = pageTitle;
+        this.infoText = infoText;
+        this.checker = null;
+        this.onVerified = null;
+        this.onSet = onSet;
+        this.setTitleMode = true;
     }
 
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setTitle(LocaleController.getString(R.string.HiddenAccounts));
+        actionBar.setTitle(pageTitle);
         actionBar.setAllowOverlayTitle(false);
         actionBar.setCastShadows(true);
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
@@ -90,14 +116,14 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
         titleView.setTypeface(AndroidUtilities.bold());
         titleView.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
-        titleView.setText(LocaleController.getString(R.string.ForkHiddenAccountUnlockTitle));
+        titleView.setText(pageTitle);
         titleView.setGravity(Gravity.CENTER);
         layout.addView(titleView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 16, 0, 0));
 
         infoTextView = new TextView(context);
         infoTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         infoTextView.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteGrayText));
-        infoTextView.setText(LocaleController.getString(R.string.ForkHiddenAccountUnlockInfo));
+        infoTextView.setText(infoText);
         infoTextView.setGravity(Gravity.CENTER);
         layout.addView(infoTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 8, 32, 0));
 
@@ -121,15 +147,15 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         AndroidUtilities.cancelRunOnUIThread(cooldownUpdater);
     }
 
-    private CodeFieldContainer createCodeContainer(Context context) {
-        CodeFieldContainer container = new CodeFieldContainer(context) {
+    private org.telegram.ui.CodeFieldContainer createCodeContainer(Context context) {
+        org.telegram.ui.CodeFieldContainer container = new org.telegram.ui.CodeFieldContainer(context) {
             @Override
             protected void processNextPressed() {
                 verifyCode(this);
             }
         };
-        container.setNumbersCount(4, CodeFieldContainer.TYPE_PASSCODE);
-        for (CodeNumberField field : container.codeField) {
+        container.setNumbersCount(4, org.telegram.ui.CodeFieldContainer.TYPE_PASSCODE);
+        for (org.telegram.ui.CodeNumberField field : container.codeField) {
             field.setShowSoftInputOnFocusCompat(true);
             field.setTransformationMethod(PasswordTransformationMethod.getInstance());
             field.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
@@ -137,8 +163,8 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         return container;
     }
 
-    private void verifyCode(CodeFieldContainer container) {
-        if (unlocking) {
+    private void verifyCode(org.telegram.ui.CodeFieldContainer container) {
+        if (completing) {
             return;
         }
         long now = SystemClock.elapsedRealtime();
@@ -149,14 +175,48 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
             return;
         }
 
-        int account = HiddenAccountHelper.findHiddenAccountByCode(container.getCode());
-        if (account >= 0) {
-            unlocking = true;
+        String code = container.getCode();
+        if (setTitleMode) {
+            if (firstSetCode == null) {
+                if (!isValidForkCode(code)) {
+                    badAttempts++;
+                    if (badAttempts % ATTEMPTS_PER_COOLDOWN == 0) {
+                        startCooldown(now + COOLDOWN_MS);
+                    } else {
+                        showCodeError(container);
+                    }
+                    return;
+                }
+                firstSetCode = code;
+                clearCodeContainer(container);
+                infoTextView.setText(LocaleController.getString(R.string.ForkSettingsLockConfirmCodeInfo));
+                focusCodeContainer(container);
+                return;
+            }
+            if (!firstSetCode.equals(code)) {
+                firstSetCode = null;
+                infoTextView.setText(infoText);
+                AlertsCreator.showSimpleAlert(this, LocaleController.getString(R.string.ForkSettingsLockCodesDoNotMatch));
+                clearCodeContainer(container);
+                focusCodeContainer(container);
+                return;
+            }
+            completing = true;
             AndroidUtilities.hideKeyboard(container);
-            HiddenAccountHelper.setUnlockedHiddenAccount(account);
+            final String finalCode = code;
             finishFragment();
-            if (LaunchActivity.instance != null && UserConfig.selectedAccount != account) {
-                LaunchActivity.instance.switchToAccount(account, true);
+            if (onSet != null) {
+                onSet.accept(finalCode);
+            }
+            return;
+        }
+
+        if (checker != null && checker.check(code)) {
+            completing = true;
+            AndroidUtilities.hideKeyboard(container);
+            finishFragment();
+            if (onVerified != null) {
+                onVerified.run();
             }
             return;
         }
@@ -169,10 +229,14 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         }
     }
 
+    private static boolean isValidForkCode(String code) {
+        return code != null && code.matches("\\d{4}");
+    }
+
     private void startCooldown(long until) {
         cooldownUntil = until;
         clearCodeContainer(codeContainer);
-        for (CodeNumberField field : codeContainer.codeField) {
+        for (org.telegram.ui.CodeNumberField field : codeContainer.codeField) {
             field.setEnabled(false);
         }
         errorTextView.setVisibility(View.VISIBLE);
@@ -185,7 +249,7 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         if (codeContainer == null) {
             return;
         }
-        for (CodeNumberField field : codeContainer.codeField) {
+        for (org.telegram.ui.CodeNumberField field : codeContainer.codeField) {
             field.setEnabled(true);
         }
         errorTextView.setVisibility(View.GONE);
@@ -193,8 +257,8 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         focusCodeContainer(codeContainer);
     }
 
-    private static void clearCodeContainer(CodeFieldContainer container) {
-        for (CodeNumberField field : container.codeField) {
+    private static void clearCodeContainer(org.telegram.ui.CodeFieldContainer container) {
+        for (org.telegram.ui.CodeNumberField field : container.codeField) {
             field.setText("");
         }
         if (container.codeField[0].isEnabled()) {
@@ -202,22 +266,22 @@ public class ForkHiddenAccountUnlockActivity extends BaseFragment {
         }
     }
 
-    private static void focusCodeContainer(CodeFieldContainer container) {
+    private static void focusCodeContainer(org.telegram.ui.CodeFieldContainer container) {
         container.codeField[0].requestFocus();
         AndroidUtilities.runOnUIThread(() -> AndroidUtilities.showKeyboard(container.codeField[0]), 100);
     }
 
-    private void showCodeError(CodeFieldContainer container) {
+    private void showCodeError(org.telegram.ui.CodeFieldContainer container) {
         try {
             container.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
         } catch (Exception ignore) {
         }
         clearCodeContainer(container);
-        for (CodeNumberField field : container.codeField) {
+        for (org.telegram.ui.CodeNumberField field : container.codeField) {
             field.animateErrorProgress(1f);
         }
         AndroidUtilities.shakeViewSpring(container, 10, () -> AndroidUtilities.runOnUIThread(() -> {
-            for (CodeNumberField field : container.codeField) {
+            for (org.telegram.ui.CodeNumberField field : container.codeField) {
                 field.animateErrorProgress(0f);
             }
         }, 150));

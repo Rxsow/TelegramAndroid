@@ -498,11 +498,6 @@ public class ForkSettingsActivity extends BaseFragment {
         return Integer.toString(LinkReplacements.enabledCount());
     }
 
-    private String getHiddenAccountsText() {
-        int hiddenCount = HiddenAccountHelper.getHiddenAccountsCount();
-        return hiddenCount > 0 ? Integer.toString(hiddenCount) : LocaleController.getString(R.string.PasswordOff);
-    }
-
     private String getWebPublishText() {
         String base = WebPublishConfig.base().trim();
         if (base.isEmpty()) {
@@ -751,9 +746,8 @@ public class ForkSettingsActivity extends BaseFragment {
             .setChecked(pref("showNotificationContent", false)).setMultiline(true));
         items.add(UItem.asButtonCheck(ID_DROP_SCREENSHOT_CAPTION, LocaleController.getString(R.string.DropScreenshotCaption), LocaleController.getString(R.string.DropScreenshotCaptionInfo))
             .setChecked(pref("dropScreenshotCaption", true)).setMultiline(true));
-        if (HiddenAccountHelper.shouldShowSettingsEntry(currentAccount)) {
-            items.add(UItem.asSettingsCell(ID_HIDDEN_ACCOUNTS, LocaleController.getString(R.string.HiddenAccounts), getHiddenAccountsText()));
-        }
+        // Tele iOS: hidden accounts moved out of Tele iOS Settings – they are
+        // managed from the gear in the account menu now
         items.add(UItem.asSettingsCell(ID_FORK_SETTINGS_LOCK, LocaleController.getString(R.string.ForkSettingsLock), getForkSettingsLockText()));
         items.add(UItem.asShadow(null));
 
@@ -1033,8 +1027,6 @@ public class ForkSettingsActivity extends BaseFragment {
             toggle("showNotificationContent", item, view);
         } else if (id == ID_DROP_SCREENSHOT_CAPTION) {
             toggle("dropScreenshotCaption", item, view);
-        } else if (id == ID_HIDDEN_ACCOUNTS) {
-            presentFragment(new HiddenAccountsActivity());
         } else if (id == ID_FORK_SETTINGS_LOCK) {
             if (ForkSettingsLock.hasCode()) {
                 showCurrentCodeDialog(this::showForkSettingsLockActions);

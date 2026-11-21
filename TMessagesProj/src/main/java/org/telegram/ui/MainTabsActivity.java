@@ -671,7 +671,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                 }
             }, HiddenAccountHelper.hasAnyHiddenAccounts() ? () -> {
                 o.dismiss();
-                presentFragment(new ForkHiddenAccountUnlockActivity());
+                // full-screen code page reveals hidden accounts for the session
+                presentFragment(new ForkCodeEntryActivity(
+                        getString(R.string.HiddenAccounts),
+                        getString(R.string.ForkHiddenAccountUnlockInfo),
+                        code -> HiddenAccountHelper.checkCode(code),
+                        () -> HiddenAccountHelper.unlockSession()));
             } : null);
         }
 
@@ -687,6 +692,14 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                         LaunchActivity.instance.switchToAccount(account, true);
                     }
                 });
+                // Tele iOS: gear opens the hidden-accounts management screen
+                final View gearView = btn.findViewWithTag("fork_gear");
+                if (gearView != null) {
+                    gearView.setOnClickListener(v -> {
+                        o.dismiss();
+                        ForkAccountHidingActivity.open(MainTabsActivity.this);
+                    });
+                }
                 o.addView(btn, LayoutHelper.createLinear(230, 48));
             }
         }
@@ -747,6 +760,14 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         textView.setMaxLines(2);
         textView.setEllipsize(TextUtils.TruncateAt.END);
         btn.addView(textView, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 13, 0, 14, 0));
+
+        // Tele iOS: gear on every account row – opens the hidden-accounts management
+        final android.widget.ImageView gearView = new android.widget.ImageView(getContext());
+        gearView.setTag("fork_gear");
+        gearView.setImageResource(R.drawable.msg2_secret);
+        gearView.setColorFilter(getThemedColor(Theme.key_dialogTextGray));
+        gearView.setAlpha(0.7f);
+        btn.addView(gearView, LayoutHelper.createLinear(24, 24, Gravity.CENTER_VERTICAL, 0, 0, 16, 0));
 
         return btn;
     }

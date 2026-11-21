@@ -1210,11 +1210,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     public void switchToAccount(int account, boolean removeAll, GenericProvider<Void, MainTabsActivity> dialogsActivityProvider) {
-        if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account) || HiddenAccountHelper.isAccountHidden(account) && !HiddenAccountHelper.isUnlockedHiddenAccount(account)) {
+        // Tele iOS: hidden accounts (still locked) cannot be switched to; the
+        // unlock session now persists across account switches on purpose
+        if (account == UserConfig.selectedAccount || !UserConfig.isValidAccount(account) || HiddenAccountHelper.isAccountHidden(account)) {
             return;
-        }
-        if (HiddenAccountHelper.isUnlockedHiddenAccount(currentAccount) && currentAccount != account) {
-            HiddenAccountHelper.clearUnlockedHiddenAccount();
         }
         switchingAccount = true;
 
@@ -1486,13 +1485,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         SharedConfig.isWaitingForPasscodeEnter = true;
         PasscodeView.PasscodeViewDelegate delegate = view -> {
             SharedConfig.isWaitingForPasscodeEnter = false;
-            int hiddenAccount = HiddenAccountHelper.consumePendingUnlockAccount();
-            if (hiddenAccount >= 0) {
-                HiddenAccountHelper.setUnlockedHiddenAccount(hiddenAccount);
-                if (UserConfig.selectedAccount != hiddenAccount) {
-                    switchToAccount(hiddenAccount, true);
-                }
-            }
             if (passcodeSaveIntent != null) {
                 handleIntent(passcodeSaveIntent, passcodeSaveIntentIsNew, passcodeSaveIntentIsRestore, true, null, false, true);
                 passcodeSaveIntent = null;

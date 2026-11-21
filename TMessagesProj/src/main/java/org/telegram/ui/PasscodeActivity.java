@@ -290,9 +290,6 @@ public class PasscodeActivity extends BaseFragment implements NotificationCenter
                                 .setMessage(LocaleController.getString(R.string.DisablePasscodeConfirmMessage))
                                 .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
                                 .setPositiveButton(LocaleController.getString(R.string.DisablePasscodeTurnOff), (dialog, which) -> {
-                                    if (HiddenAccountHelper.hasAnyHiddenAccounts()) {
-                                        HiddenAccountHelper.setStealthModeEnabled(true);
-                                    }
                                     SharedConfig.passcodeHash = "";
                                     SharedConfig.appLocked = false;
                                     SharedConfig.saveConfig();

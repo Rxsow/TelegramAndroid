@@ -204,6 +204,15 @@
     <string name="ForkHiddenAccountUnlockTitle">Hidden account</string>
     <string name="ForkHiddenAccountUnlockInfo">Enter the 4-digit unlock code of a hidden account. Unlock codes are set in Tele iOS Settings → Hidden accounts.</string>
     <string name="ForkHiddenAccountUnlockCooldown">Too many attempts. Try again in %d seconds</string>
+    <string name="ForkAccountsHidingSecurity">Security</string>
+    <string name="ForkAccountsHidingAccounts">Accounts</string>
+    <string name="ForkAccountsHidingInfo">One 4-digit code guards every hidden account. It is entered on the full-screen code page (long-press Add account); the unlock lasts until the app closes.</string>
+    <string name="ForkAccountsHidingAccountsInfo">Tap an account to hide or reveal it. Hidden accounts disappear from every account picker until the code unlocks them.</string>
+    <string name="ForkAccountsHidingNeedsCode">Set the 4-digit code first, then hide accounts.</string>
+    <string name="ForkAccountsHidingSetCodeInfo">Enter a new 4-digit code. This single code unlocks every hidden account and the management screen.</string>
+    <string name="ForkAccountsHidingCodeSaved">Code saved</string>
+    <string name="ForkAccountsHidingAccountHidden">Account hidden</string>
+    <string name="ForkAccountsHidingRemoveCodeInfo">Remove the code? Hidden accounts can be revealed again without a code until a new code is set.</string>
     <string name="ForkSettingsLockConfirmCurrentCodeInfo">Enter the current code to change or remove it.</string>
     <string name="ForkSettingsLockConfirmCodeInfo">Enter the code again to confirm.</string>
     <string name="ForkSettingsLockCodesDoNotMatch">Codes don\'t match. Enter a new code.</string>

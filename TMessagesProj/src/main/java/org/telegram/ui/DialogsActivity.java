@@ -3573,14 +3573,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             @Override
             public void onTextChanged(EditText editText) {
                 String text = editText.getText().toString();
-                int hiddenAccount = HiddenAccountHelper.tryUnlockFromSearch(text.trim());
-                if (hiddenAccount >= 0) {
-                    actionBar.closeSearchField();
-                    if (LaunchActivity.instance != null) {
-                        LaunchActivity.instance.switchToAccount(hiddenAccount, true);
-                    }
-                    return;
-                }
                 if (!text.isEmpty() || (searchViewPager != null && searchViewPager.dialogsSearchAdapter != null && searchViewPager.dialogsSearchAdapter.hasRecentSearch()) || searchFiltersWasShowed || hasStories) {
                     searchWas = true;
                     if (!searchIsShowed) {

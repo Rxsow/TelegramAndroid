@@ -557,7 +557,11 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
     @Override
     protected boolean onLongClick(UItem item, View view, int position, float x, float y) {
         if (item.id == BUTTON_ADD_ACCOUNT && HiddenAccountHelper.hasAnyHiddenAccounts()) {
-            presentFragment(new ForkHiddenAccountUnlockActivity());
+            presentFragment(new ForkCodeEntryActivity(
+                    getString(R.string.HiddenAccounts),
+                    getString(R.string.ForkHiddenAccountUnlockInfo),
+                    code -> HiddenAccountHelper.checkCode(code),
+                    () -> HiddenAccountHelper.unlockSession()));
             return true;
         }
         return false;

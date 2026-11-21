@@ -86,7 +86,6 @@ public class ForkContactChangesDetailActivity extends BaseFragment {
         listView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
         listView.setAdapter(adapter = new ListAdapter(context));
         listView.setEmptyView(emptyView);
-        listView.setOnItemClickListener(null);
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
         return fragmentView;

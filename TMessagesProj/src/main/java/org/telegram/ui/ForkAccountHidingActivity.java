@@ -3,7 +3,6 @@ package org.telegram.ui;
 import android.content.Context;
 import android.view.View;
 
-import org.telegram.messenger.LaunchActivity;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
@@ -17,6 +16,7 @@ import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
+import org.telegram.ui.Components.UniversalFragment;
 
 /**
  * Tele iOS: hidden-accounts management, opened from the gear in the account
